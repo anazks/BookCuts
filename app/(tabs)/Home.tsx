@@ -16,7 +16,7 @@ import {
 import { getAllShops } from '../api/Service/Shop';
 import { getmyProfile } from '../api/Service/User';
 
-const Home = ({ navigation }) => {
+const Home = () => {
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -134,10 +134,13 @@ const Home = ({ navigation }) => {
   ];
 
   // Handle shop card press
-  const handleShopPress = (shop) => {
-    console.log('Shop pressed:', shop);
-  };
-
+const handleShopPress = (shop) => {
+  console.log('Shop pressed:', shop);
+  router.push({
+    pathname: '/Screens/User/BookNow',
+    params: { shop_id: shop.id }
+  });
+};
   // Handle refresh
   const handleRefresh = () => {
     getShops();

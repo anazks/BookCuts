@@ -14,10 +14,22 @@ export const getAllShops = async () => {
 
 export const getShopById = async (shopId: string) => {
   try {
-    const response = await Axios.post('/shop/getShopById', { shopId });
+    let id =shopId
+    let data = id
+    const response = await Axios.post('/shop/viewSigleShop/', {data});
     return response.data;
   } catch (error: any) {
     throw error?.response?.data || { message: "Failed to fetch shop details" };
   }
 };
+
+export const getmyBarbers = async (shopId: string) => {
+  try {
+    const response = await Axios.get(`/shop/viewMyBarbers/${shopId}`);
+    console.log("Response from getmyBarbers:", response);
+    return response.data;
+  } catch (error: any) {
+    throw error?.response?.data || { message: "Failed to fetch barbers" };
+  }
+}
 

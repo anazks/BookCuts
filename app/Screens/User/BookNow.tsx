@@ -1,34 +1,33 @@
-import React, { useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Collapsible from 'react-native-collapsible';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { getShopById } from '../../api/Service/Shop';
 
-export default function BookNow({ route }) {
-  // Sample data
-  const shopDetails =  {
-    id: 1,
-    name: "Premium Barber Shop",
-    address: "123 Main St, Cityville, 560001",
-    rating: 4.5,
-    openingTime: "09:00",
-    closingTime: "21:00",
-    services: [
-      { id: 1, name: "Haircut", price: 200, duration: 30 },
-      { id: 2, name: "Beard Trim", price: 100, duration: 15 },
-      { id: 3, name: "Hair Color", price: 500, duration: 60 },
-      { id: 4, name: "Face Wash", price: 150, duration: 20 },
-      { id: 5, name: "Head Massage", price: 250, duration: 30 },
-      { id: 6, name: "Hair Spa", price: 600, duration: 45 },
-      { id: 7, name: "Hair Treatment", price: 400, duration: 40 },
-    ],
-    barbers: [
-      { id: 1, name: "John Doe", nativePlace: "Mumbai", avatar: "👨" },
-      { id: 2, name: "Mike Smith", nativePlace: "Delhi", avatar: "🧔" },
-      { id: 3, name: "David Wilson", nativePlace: "Bangalore", avatar: "👨‍🦱" },
-    ]
-  };
+// Helper function to convert time string to 24-hour format
+const parseTime = (timeStr: string): string => {
+  timeStr = timeStr.trim().toLowerCase();
+  const match = timeStr.match(/(\d+)([ap]m)/);
+  
+  if (!match) return '09:00'; // Default fallback
+  
+  let hour = parseInt(match[1], 10);
+  const modifier = match[2];
+  
+  if (modifier === 'pm' && hour !== 12) {
+    hour += 12;
+  } else if (modifier === 'am' && hour === 12) {
+    hour = 0;
+  }
+  
+  return `${hour.toString().padStart(2, '0')}:00`;
+};
 
-  // State management
+export default function BookNow() {
+  const { shop_id } = useLocalSearchParams();
+  const [shopDetails, setShopDetails] = useState(null);
+  const [loading, setLoading] = useState(true);
   const [selectedBarber, setSelectedBarber] = useState(null);
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
@@ -38,13 +37,75 @@ export default function BookNow({ route }) {
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
 
-  // Time slots
-  const timeSlots = [
-    { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00", icon: "🌅" },
-    { id: 2, name: "Noon", start: "12:00", end: "15:00", icon: "☀️" },
-    { id: 3, name: "Evening", start: "15:00", end: "19:00", icon: "🌇" },
-    { id: 4, name: "Night", start: "19:00", end: shopDetails.closingTime, icon: "🌙" },
-  ];
+  useEffect(() => {
+    const fetchShopDetails = async () => {
+      try {
+        setLoading(true);
+        const response = await getShopById(shop_id);
+        console.log("API Response:", response);
+        
+        if (response && response.success && response.data && response.data.length > 0) {
+          const shopData = response.data[0];
+          
+          // Parse opening and closing times
+          const times = shopData.Timing.split('-').map(t => t.trim());
+          const openingTime = parseTime(times[0]);
+          const closingTime = parseTime(times[1]);
+          
+          // Mock services and barbers (since API doesn't provide them)
+          const mockServices = [
+            { id: 1, name: "Haircut", price: 200, duration: 30 },
+            { id: 2, name: "Beard Trim", price: 100, duration: 15 },
+            { id: 3, name: "Hair Color", price: 500, duration: 60 },
+            { id: 4, name: "Face Wash", price: 150, duration: 20 },
+            { id: 5, name: "Head Massage", price: 250, duration: 30 },
+          ];
+          
+          const mockBarbers = [
+            { id: 1, name: "John Doe", nativePlace: "Mumbai", avatar: "👨" },
+            { id: 2, name: "Mike Smith", nativePlace: "Delhi", avatar: "🧔" },
+            { id: 3, name: "David Wilson", nativePlace: "Bangalore", avatar: "👨‍🦱" },
+          ];
+          
+          setShopDetails({
+            id: shopData._id,
+            name: shopData.ShopName,
+            address: `${shopData.City} • ${shopData.Mobile}`,
+            openingTime,
+            closingTime,
+            services: mockServices,
+            barbers: mockBarbers
+          });
+        } else {
+          Alert.alert("Error", response?.message || "Failed to load shop details");
+        }
+      } catch (error) {
+        console.error("Error fetching shop details:", error);
+        Alert.alert("Error", "Failed to load shop details. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    if (shop_id) {
+      fetchShopDetails();
+    } else {
+      Alert.alert('Error', 'No shop ID provided');
+      setLoading(false);
+    }
+  }, [shop_id]);
+
+  // Time slots (will be generated based on shop details)
+  const getTimeSlots = () => {
+    if (!shopDetails) return [];
+    
+    return [
+      { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00", icon: "🌅" },
+      { id: 2, name: "Noon", start: "12:00", end: "15:00", icon: "☀️" },
+      { id: 3, name: "Evening", start: "15:00", end: "19:00", icon: "🌇" },
+      { id: 4, name: "Night", start: "19:00", end: shopDetails.closingTime, icon: "🌙" },
+    ];
+  };
 
   // Calculate totals
   const totalPrice = selectedServices.reduce((sum, service) => sum + service.price, 0);
@@ -131,28 +192,21 @@ export default function BookNow({ route }) {
     try {
       const formData = prepareFormData();
       
-      // Log the structured data (replace with actual API call)
+      // Log the structured data
       console.log("📋 Booking Form Data:", JSON.stringify(formData, null, 2));
       
       // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
-      // Here you would make your actual API call:
-      // const response = await fetch('/api/bookings', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify(formData)
-      // });
-      
       Alert.alert(
         "🎉 Booking Confirmed!", 
-        `Your appointment is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
+        `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
         [{ text: "Great!", style: "default" }]
       );
       
     } catch (error) {
       Alert.alert("Booking Failed", "Something went wrong. Please try again.");
-      console.error("Booking error:", error);
+      console.error("❌ Booking error:", error);
     } finally {
       setIsBooking(false);
     }
@@ -167,7 +221,33 @@ export default function BookNow({ route }) {
     return { completed, total: 3 };
   };
 
+  // Loading state
+  if (loading) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#FF6B6B" />
+        <Text style={styles.loadingText}>Loading shop details...</Text>
+      </View>
+    );
+  }
+
+  // Error state
+  if (!shopDetails) {
+    return (
+      <View style={[styles.container, styles.errorContainer]}>
+        <Text style={styles.errorText}>Failed to load shop details</Text>
+        <TouchableOpacity 
+          style={styles.retryButton} 
+          onPress={() => fetchShopDetails(shop_id)}
+        >
+          <Text style={styles.retryButtonText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   const progress = getProgressSteps();
+  const timeSlots = getTimeSlots();
 
   return (
     <View style={styles.container}>
@@ -176,7 +256,7 @@ export default function BookNow({ route }) {
         <Text style={styles.shopName}>{shopDetails.name}</Text>
         <Text style={styles.shopAddress}>{shopDetails.address}</Text>
         <Text style={styles.shopHours}>
-          Open: {shopDetails.openingTime} - {shopDetails.closingTime}
+          Open: {shopDetails.Timing || `${shopDetails.openingTime} - ${shopDetails.closingTime}`}
         </Text>
         
         {/* Progress Bar */}
@@ -408,6 +488,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f8f9fa',
   },
+  loadingContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#666',
+    fontWeight: '500',
+  },
+  errorContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#FF6B6B',
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  retryButton: {
+    backgroundColor: '#FF6B6B',
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  retryButtonText: {
+    color: 'white',
+    fontWeight: '600',
+  },
   shopHeader: {
     backgroundColor: '#FF6B6B',
     padding: 20,
@@ -427,7 +538,7 @@ const styles = StyleSheet.create({
   shopHours: {
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-    marginBottom: 16,
+    marginBottom: 4,
   },
   progressContainer: {
     marginTop: 8,
@@ -739,8 +850,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   bookButtonSubtext: {
-    color: 'rgba(255,255,255,0.85)',
+    color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     marginTop: 4,
+    textAlign: 'center',
   },
 });
