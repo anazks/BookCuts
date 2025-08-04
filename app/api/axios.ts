@@ -1,15 +1,24 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import axios from 'axios';
+
 // import { getToken } from './Utils/Storage'; 
 // Ensure this path is correct based on your project structure
 // import { getToken } from '../utils/storage';
 
 const axiosInstance = axios.create({
-  baseURL: 'https://bookmycuts.onrender.com/api/', // ⬅️ Replace with your real API base URL
+  baseURL: 'http://localhost:3002/api/', // ⬅️ Replace with your real API base URL
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
+axiosInstance.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('accessToken');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
+}, error => Promise.reject(error));
 
 export default axiosInstance;

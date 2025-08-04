@@ -1,3 +1,4 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
@@ -21,7 +22,6 @@ export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
-    // Basic validation
     if (!email.trim()) {
       Alert.alert('Error', 'Please enter your email');
       return;
@@ -38,32 +38,35 @@ export default function Login() {
     }
 
     setIsLoading(true);
-    
+
     try {
       const response = await userLogin({ email, password });
-      
-      if (response.success) {
-        Alert.alert(
-          'Success', 
-          'Login successful!',
-          [
-            { 
-              text: 'Continue', 
-              onPress: () => router.replace('/(tabs)/Home')
-            }
-          ]
-        );
+      console.log('Login response:', response);
+
+      if (
+        response.success === true &&
+        response.result &&
+        response.result.token &&
+        !response.result.message
+      ) {
+        // Store the token
+        await AsyncStorage.setItem('accessToken', response.result.token);
+         router.replace('/(tabs)/Home')
+        Alert.alert('Success', 'Login successful!', [
+          {
+            text: 'Continue',
+            onPress: () => router.replace('/(tabs)/Home')
+          }
+        ]);
       } else {
-        Alert.alert(
-          'Login Failed', 
-          response.message || 'Invalid email or password. Please try again.',
-          [{ text: 'OK' }]
-        );
+        const errorMessage =
+          response.result?.message || response.message || 'Invalid login details.';
+        Alert.alert('Login Failed', errorMessage, [{ text: 'OK' }]);
       }
     } catch (error) {
       console.error('Login error:', error);
       Alert.alert(
-        'Error', 
+        'Error',
         'An unexpected error occurred. Please try again later.',
         [{ text: 'OK' }]
       );
@@ -74,7 +77,7 @@ export default function Login() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <KeyboardAvoidingView 
+      <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
@@ -110,7 +113,7 @@ export default function Login() {
                 onChangeText={setPassword}
                 editable={!isLoading}
               />
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={styles.visibilityToggle}
                 onPress={() => setIsPasswordVisible(!isPasswordVisible)}
                 disabled={isLoading}
@@ -122,14 +125,11 @@ export default function Login() {
             </View>
           </View>
 
-          <TouchableOpacity 
-            style={styles.forgotPassword}
-            disabled={isLoading}
-          >
+          <TouchableOpacity style={styles.forgotPassword} disabled={isLoading}>
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity 
+          <TouchableOpacity
             style={[
               styles.loginButton,
               isLoading && styles.loginButtonDisabled
@@ -147,7 +147,7 @@ export default function Login() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don't have an account? </Text>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={() => router.push('/Screens/User/Register')}
             disabled={isLoading}
           >

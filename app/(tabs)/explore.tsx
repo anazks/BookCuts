@@ -1,8 +1,59 @@
-import { Ionicons } from '@expo/vector-icons'
-import React from 'react'
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native'
+import { Ionicons } from '@expo/vector-icons';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { getmyProfile } from '../api/Service/User';
 
-export default function explore() {
+export default function Profile() {
+  const [userData, setUserData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  const fetchProfile = async () => {
+    try {
+      setLoading(true);
+      const response = await getmyProfile();
+      
+      if (response && response.success) {
+        setUserData(response.user);
+      } else {
+        setError(response?.message || 'Failed to load profile');
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+      setError('Network error. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchProfile();
+  }, []);
+
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#2563eb" />
+        <Text style={styles.loadingText}>Loading profile...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.errorContainer}>
+        <Ionicons name="alert-circle-outline" size={48} color="#ef4444" />
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity 
+          style={styles.retryButton}
+          onPress={fetchProfile}
+        >
+          <Text style={styles.retryText}>Try Again</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
+
   return (
     <ScrollView 
       style={styles.container}
@@ -19,9 +70,13 @@ export default function explore() {
 
       {/* Profile Section */}
       <View style={styles.profileSection}>
-        <Text style={styles.userName}>Sarah Johnson</Text>
-        <Text style={styles.userEmail}>sarah.johnson@email.com</Text>
-        <Text style={styles.userLocation}>📍 New York, USA</Text>
+        <Text style={styles.userName}>
+          {userData?.firstName} {userData?.lastName}
+        </Text>
+        <Text style={styles.userEmail}>{userData?.email}</Text>
+        <Text style={styles.userLocation}>
+          📍 {userData?.city || 'Location not set'}
+        </Text>
       </View>
 
       {/* Stats Section */}
@@ -83,7 +138,7 @@ export default function explore() {
         <Text style={styles.logoutText}>Logout</Text>
       </TouchableOpacity>
     </ScrollView>
-  )
+  );
 }
 
 const styles = StyleSheet.create({
@@ -205,4 +260,39 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-})
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#f8fafc',
+  },
+  loadingText: {
+    marginTop: 16,
+    fontSize: 16,
+    color: '#64748b',
+  },
+  errorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    backgroundColor: '#f8fafc',
+  },
+  errorText: {
+    fontSize: 16,
+    color: '#ef4444',
+    textAlign: 'center',
+    marginVertical: 20,
+  },
+  retryButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    backgroundColor: '#2563eb',
+    borderRadius: 8,
+  },
+  retryText: {
+    color: '#ffffff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+});

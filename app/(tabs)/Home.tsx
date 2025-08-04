@@ -13,34 +13,28 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { getAllShops } from '../api/Service/Shop'; // Ensure this path is correct based on your project structure
+import { getAllShops } from '../api/Service/Shop';
+import { getmyProfile } from '../api/Service/User';
+
 const Home = ({ navigation }) => {
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [userProfile, setUserProfile] = useState(null);
 
   // API call to fetch all shops
   const getShops = async () => {
     try {
       setLoading(true);
       setError(null);
-      
-      
-     
-
-      
-
       const result = await getAllShops();
-      console.log("Fetched shops:", result);
       if (result && result.success) {
         setShops(result.data);
       } else {
         console.log("Error fetching shops:", result);
-        // throw new Error(result.message || 'Failed to fetch shops');
       }
     } catch (error) {
       console.error("Error fetching shops:", error);
-      // setError(error.message);
       Alert.alert(
         "Error", 
         "Failed to load shops. Please check your connection and try again.",
@@ -51,8 +45,22 @@ const Home = ({ navigation }) => {
     }
   };
 
+  // Fetch user profile
+  const getProfile = async () => {
+    try {
+      const response = await getmyProfile();
+      console.log("User Profile Response:", response);
+      if (response && response.success) {
+        setUserProfile(response.user);
+      }
+    } catch (error) {
+      console.error("Error fetching profile:", error);
+    }
+  };
+
   useEffect(() => {
     getShops();
+    getProfile();
   }, []);
 
   // Transform API data to match UI requirements
@@ -60,16 +68,15 @@ const Home = ({ navigation }) => {
     return apiShops.map((shop, index) => ({
       id: shop._id || shop.shopId || index.toString(),
       name: shop.ShopName || `${shop.firstName} ${shop.lastName}`.trim() || 'Unknown Shop',
-      rating: '4.5', // Default rating since not provided in API
-      services: 'Haircut, Beard, Styling', // Default services
-      price: '$25-45', // Default price range
-      distance: `${(Math.random() * 2 + 0.5).toFixed(1)} km`, // Random distance
+      rating: '4.5',
+      services: 'Haircut, Beard, Styling',
+      price: '$25-45',
+      distance: `${(Math.random() * 2 + 0.5).toFixed(1)} km`,
       city: shop.City || shop.city || 'Unknown City',
       timing: shop.Timing || '9am - 8pm',
       mobile: shop.Mobile || shop.mobileNo || '',
       website: shop.website || '',
       email: shop.email || '',
-      // Using placeholder images since API doesn't provide image URLs
       image: `https://images.unsplash.com/photo-${1595476108010 + (index * 1000)}?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60`
     }));
   };
@@ -80,15 +87,13 @@ const Home = ({ navigation }) => {
     return transformedShops.slice(0, 6);
   };
 
-  // Get top rated shops (shops from specific cities or criteria)
+  // Get top rated shops
   const getTopRatedShops = () => {
     const transformedShops = transformShopData(shops);
-    // Filter shops from major cities or use other criteria
     const topRated = transformedShops.filter(shop => 
       ['Kochi', 'Salem', 'Kerala'].includes(shop.city)
     ).slice(0, 4);
     
-    // If not enough shops from major cities, add more
     if (topRated.length < 4) {
       const remaining = transformedShops.filter(shop => 
         !['Kochi', 'Salem', 'Kerala'].includes(shop.city)
@@ -99,7 +104,7 @@ const Home = ({ navigation }) => {
     return topRated;
   };
 
-  // Sample trending designs data (can be fetched from another API if available)
+  // Sample trending designs data
   const trendingDesigns = [
     { 
       id: '1', 
@@ -130,14 +135,12 @@ const Home = ({ navigation }) => {
 
   // Handle shop card press
   const handleShopPress = (shop) => {
-    // Navigate to shop details or booking screen
     console.log('Shop pressed:', shop);
-    // navigation.navigate('ShopDetails', { shop });
   };
 
   // Handle refresh
   const handleRefresh = () => {
-    getAllShops();
+    getShops();
   };
 
   if (loading) {
@@ -156,7 +159,7 @@ const Home = ({ navigation }) => {
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor="#FFF" />
       
-      {/* Enhanced Navigation Header */}
+      {/* Navigation Header */}
       <View style={styles.navContainer}>
         <View style={styles.navContent}>
           <View style={styles.headerLeft}>
@@ -165,7 +168,7 @@ const Home = ({ navigation }) => {
             </TouchableOpacity>
             <View style={styles.locationContainer}>
               <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.locationText}>Kerala, India</Text>
+              <Text style={styles.locationText}>{userProfile ? userProfile.city : 'india'}</Text>
               <Ionicons name="chevron-down" size={16} color="#666" />
             </View>
           </View>
@@ -195,9 +198,11 @@ const Home = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        {/* Welcome Section */}
+        {/* Welcome Section with Dynamic Name */}
         <View style={styles.welcomeSection}>
-          <Text style={styles.welcomeTitle}>Hello, Alex! 👋</Text>
+          <Text style={styles.welcomeTitle}>
+            Hello, {userProfile ? userProfile.firstName : 'there'}! 👋
+          </Text>
           <Text style={styles.welcomeSubtitle}>Find the perfect salon for your style</Text>
           {shops.length > 0 && (
             <Text style={styles.shopsCount}>{shops.length} shops available</Text>
@@ -376,7 +381,7 @@ const Home = ({ navigation }) => {
                 <Text style={styles.offerCode}>Use code: FIRST20</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.bookNowButton} onPress={()=> router.push('/Screens/User/BookNow')}>
+            <TouchableOpacity style={styles.bookNowButton} onPress={() => router.push('/Screens/User/BookNow')}>
               <Text style={styles.bookNowText}>Book Now</Text>
               <Ionicons name="arrow-forward" size={16} color="#FFF" />
             </TouchableOpacity>
@@ -410,7 +415,7 @@ const styles = StyleSheet.create({
   },
   navContainer: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 50, // Safe area padding
+    paddingTop: 50,
     paddingBottom: 12,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
