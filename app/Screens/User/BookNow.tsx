@@ -3,14 +3,13 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Collapsible from 'react-native-collapsible';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
-import { getShopById } from '../../api/Service/Shop';
+import { getmyBarbers, getShopById, getShopServices } from '../../api/Service/Shop';
 
-// Helper function to convert time string to 24-hour format
 const parseTime = (timeStr: string): string => {
   timeStr = timeStr.trim().toLowerCase();
   const match = timeStr.match(/(\d+)([ap]m)/);
   
-  if (!match) return '09:00'; // Default fallback
+  if (!match) return '09:00';
   
   let hour = parseInt(match[1], 10);
   const modifier = match[2];
@@ -36,95 +35,97 @@ export default function BookNow() {
   const [paymentType, setPaymentType] = useState('advance');
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
-    const fetchShopDetails = async () => {
+    const fetchShopData = async () => {
       try {
         setLoading(true);
-        const response = await getShopById(shop_id);
-        console.log("API Response:", response);
+        setError(null);
         
-        if (response && response.success && response.data && response.data.length > 0) {
-          const shopData = response.data[0];
-          
-          // Parse opening and closing times
-          const times = shopData.Timing.split('-').map(t => t.trim());
-          const openingTime = parseTime(times[0]);
-          const closingTime = parseTime(times[1]);
-          
-          // Mock services and barbers (since API doesn't provide them)
-          const mockServices = [
-            { id: 1, name: "Haircut", price: 200, duration: 30 },
-            { id: 2, name: "Beard Trim", price: 100, duration: 15 },
-            { id: 3, name: "Hair Color", price: 500, duration: 60 },
-            { id: 4, name: "Face Wash", price: 150, duration: 20 },
-            { id: 5, name: "Head Massage", price: 250, duration: 30 },
-          ];
-          
-          const mockBarbers = [
-            { id: 1, name: "John Doe", nativePlace: "Mumbai", avatar: "👨" },
-            { id: 2, name: "Mike Smith", nativePlace: "Delhi", avatar: "🧔" },
-            { id: 3, name: "David Wilson", nativePlace: "Bangalore", avatar: "👨‍🦱" },
-          ];
-          
-          setShopDetails({
-            id: shopData._id,
-            name: shopData.ShopName,
-            address: `${shopData.City} • ${shopData.Mobile}`,
-            openingTime,
-            closingTime,
-            services: mockServices,
-            barbers: mockBarbers
-          });
-        } else {
-          Alert.alert("Error", response?.message || "Failed to load shop details");
+        const shopResponse = await getShopById(shop_id);
+        console.log("Shop API Response:", shopResponse);
+        
+        if (!shopResponse?.success || !shopResponse.data?.length) {
+          throw new Error(shopResponse?.message || "Failed to load shop details");
         }
+        
+        const shopData = shopResponse.data[0];
+        const times = shopData.Timing?.split('-')?.map(t => t.trim()) || [];
+        const openingTime = times.length > 0 ? parseTime(times[0]) : '09:00';
+        const closingTime = times.length > 1 ? parseTime(times[1]) : '21:00';
+        
+        const [servicesResponse, barbersResponse] = await Promise.all([
+          getShopServices(shop_id),
+          getmyBarbers(shop_id)
+        ]);
+        
+        const services = servicesResponse?.success && servicesResponse.data 
+          ? servicesResponse.data.map(service => ({
+              id: service._id,
+              name: service.ServiceName,
+              price: parseInt(service.Rate, 10) || 0,
+              duration: 30
+            }))
+          : [];
+        
+        const barbers = barbersResponse?.success && barbersResponse.data 
+          ? barbersResponse.data.map(barber => ({
+              id: barber._id,
+              name: barber.BarBarName,
+              nativePlace: barber.From
+            }))
+          : [];
+        
+        setShopDetails({
+          id: shopData._id,
+          name: shopData.ShopName,
+          address: `${shopData.City || ''} • ${shopData.Mobile || ''}`,
+          openingTime,
+          closingTime,
+          services,
+          barbers,
+          Timing: shopData.Timing
+        });
+        
       } catch (error) {
-        console.error("Error fetching shop details:", error);
-        Alert.alert("Error", "Failed to load shop details. Please try again.");
+        console.error("Error fetching shop data:", error);
+        setError(error.message || "Failed to load shop details");
       } finally {
         setLoading(false);
       }
     };
 
     if (shop_id) {
-      fetchShopDetails();
+      fetchShopData();
     } else {
-      Alert.alert('Error', 'No shop ID provided');
+      setError('No shop ID provided');
       setLoading(false);
     }
   }, [shop_id]);
 
-  // Time slots (will be generated based on shop details)
   const getTimeSlots = () => {
     if (!shopDetails) return [];
     
     return [
-      { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00", icon: "🌅" },
-      { id: 2, name: "Noon", start: "12:00", end: "15:00", icon: "☀️" },
-      { id: 3, name: "Evening", start: "15:00", end: "19:00", icon: "🌇" },
-      { id: 4, name: "Night", start: "19:00", end: shopDetails.closingTime, icon: "🌙" },
+      { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00" },
+      { id: 2, name: "Noon", start: "12:00", end: "15:00" },
+      { id: 3, name: "Evening", start: "15:00", end: "19:00" },
+      { id: 4, name: "Night", start: "19:00", end: shopDetails.closingTime },
     ];
   };
 
-  // Calculate totals
   const totalPrice = selectedServices.reduce((sum, service) => sum + service.price, 0);
   const totalDuration = selectedServices.reduce((sum, service) => sum + service.duration, 0);
-  const advanceAmount = 20;
+  const advanceAmount = Math.min(20, totalPrice);
 
-  // Prepare form data for backend
   const prepareFormData = () => {
     return {
-      // Shop Information
       shopId: shopDetails.id,
       shopName: shopDetails.name,
-      
-      // Booking Details
       barberId: selectedBarber?.id,
       barberName: selectedBarber?.name,
       barberNativePlace: selectedBarber?.nativePlace,
-      
-      // Services
       serviceIds: selectedServices.map(s => s.id),
       services: selectedServices.map(service => ({
         id: service.id,
@@ -132,28 +133,21 @@ export default function BookNow() {
         price: service.price,
         duration: service.duration
       })),
-      
-      // Date & Time
-      bookingDate: selectedDate?.toISOString().split('T')[0], // YYYY-MM-DD format
+      bookingDate: selectedDate?.toISOString().split('T')[0],
       timeSlotId: selectedTimeSlot?.id,
       timeSlotName: selectedTimeSlot?.name,
       timeSlotStart: selectedTimeSlot?.start,
       timeSlotEnd: selectedTimeSlot?.end,
-      
-      // Pricing
       totalPrice,
       totalDuration,
-      paymentType, // 'advance' or 'full'
+      paymentType,
       amountToPay: paymentType === 'advance' ? advanceAmount : totalPrice,
       remainingAmount: paymentType === 'advance' ? totalPrice - advanceAmount : 0,
-      
-      // Metadata
       bookingTimestamp: new Date().toISOString(),
       currency: 'INR'
     };
   };
 
-  // Date picker handlers
   const showDatePicker = () => setDatePickerVisibility(true);
   const hideDatePicker = () => setDatePickerVisibility(false);
   const handleConfirm = (date) => {
@@ -161,7 +155,6 @@ export default function BookNow() {
     hideDatePicker();
   };
 
-  // Service selection with animation feedback
   const toggleService = (service) => {
     if (selectedServices.some(s => s.id === service.id)) {
       setSelectedServices(selectedServices.filter(s => s.id !== service.id));
@@ -170,7 +163,6 @@ export default function BookNow() {
     }
   };
 
-  // Validation function
   const validateBooking = () => {
     if (!selectedBarber) return "Please select a barber";
     if (selectedServices.length === 0) return "Please select at least one service";
@@ -179,7 +171,6 @@ export default function BookNow() {
     return null;
   };
 
-  // Booking submission with form data
   const handleBookNow = async () => {
     const validationError = validateBooking();
     if (validationError) {
@@ -191,28 +182,24 @@ export default function BookNow() {
     
     try {
       const formData = prepareFormData();
+      console.log("Booking Form Data:", JSON.stringify(formData, null, 2));
       
-      // Log the structured data
-      console.log("📋 Booking Form Data:", JSON.stringify(formData, null, 2));
-      
-      // Simulate API call
       await new Promise(resolve => setTimeout(resolve, 2000));
       
       Alert.alert(
-        "🎉 Booking Confirmed!", 
+        "Booking Confirmed", 
         `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
-        [{ text: "Great!", style: "default" }]
+        [{ text: "OK", style: "default" }]
       );
       
     } catch (error) {
       Alert.alert("Booking Failed", "Something went wrong. Please try again.");
-      console.error("❌ Booking error:", error);
+      console.error("Booking error:", error);
     } finally {
       setIsBooking(false);
     }
   };
 
-  // Progress indicator
   const getProgressSteps = () => {
     let completed = 0;
     if (selectedBarber) completed++;
@@ -221,24 +208,37 @@ export default function BookNow() {
     return { completed, total: 3 };
   };
 
-  // Loading state
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
-        <ActivityIndicator size="large" color="#FF6B6B" />
+        <ActivityIndicator size="large" color="#555" />
         <Text style={styles.loadingText}>Loading shop details...</Text>
       </View>
     );
   }
 
-  // Error state
-  if (!shopDetails) {
+  if (error || !shopDetails) {
     return (
       <View style={[styles.container, styles.errorContainer]}>
-        <Text style={styles.errorText}>Failed to load shop details</Text>
+        <Text style={styles.errorText}>{error || "Failed to load shop details"}</Text>
         <TouchableOpacity 
           style={styles.retryButton} 
-          onPress={() => fetchShopDetails(shop_id)}
+          onPress={() => {
+            setError(null);
+            setLoading(true);
+            if (shop_id) {
+              const fetchShopData = async () => {
+                try {
+                  // ... (same fetch logic as in useEffect)
+                } catch (error) {
+                  setError(error.message);
+                } finally {
+                  setLoading(false);
+                }
+              };
+              fetchShopData();
+            }
+          }}
         >
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
@@ -251,7 +251,6 @@ export default function BookNow() {
 
   return (
     <View style={styles.container}>
-      {/* Shop Header with Progress */}
       <View style={styles.shopHeader}>
         <Text style={styles.shopName}>{shopDetails.name}</Text>
         <Text style={styles.shopAddress}>{shopDetails.address}</Text>
@@ -259,7 +258,6 @@ export default function BookNow() {
           Open: {shopDetails.Timing || `${shopDetails.openingTime} - ${shopDetails.closingTime}`}
         </Text>
         
-        {/* Progress Bar */}
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${(progress.completed / progress.total) * 100}%` }]} />
@@ -272,25 +270,28 @@ export default function BookNow() {
         {/* Barber Selection */}
         <View style={styles.card}>
           <View style={styles.cardTitleContainer}>
-            <Text style={styles.cardTitle}>👨‍💼 Select Barber</Text>
+            <Text style={styles.cardTitle}>Select Barber</Text>
             {selectedBarber && <Text style={styles.checkmark}>✓</Text>}
           </View>
-          <View style={styles.barberContainer}>
-            {shopDetails.barbers.map(barber => (
-              <TouchableOpacity
-                key={barber.id}
-                style={[
-                  styles.barberItem,
-                  selectedBarber?.id === barber.id && styles.selectedBarber
-                ]}
-                onPress={() => setSelectedBarber(barber)}
-                activeOpacity={0.7}>
-                <Text style={styles.barberAvatar}>{barber.avatar}</Text>
-                <Text style={styles.barberName}>{barber.name}</Text>
-                <Text style={styles.barberPlace}>📍 {barber.nativePlace}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+          {shopDetails.barbers.length > 0 ? (
+            <View style={styles.barberContainer}>
+              {shopDetails.barbers.map(barber => (
+                <TouchableOpacity
+                  key={barber.id}
+                  style={[
+                    styles.barberItem,
+                    selectedBarber?.id === barber.id && styles.selectedBarber
+                  ]}
+                  onPress={() => setSelectedBarber(barber)}
+                  activeOpacity={0.7}>
+                  <Text style={styles.barberName}>{barber.name}</Text>
+                  <Text style={styles.barberPlace}>{barber.nativePlace}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : (
+            <Text style={styles.noItemsText}>No barbers available at this shop</Text>
+          )}
         </View>
 
         {/* Services Selection */}
@@ -298,7 +299,7 @@ export default function BookNow() {
           <TouchableOpacity 
             style={styles.cardTitleContainer}
             onPress={() => setServicesCollapsed(!servicesCollapsed)}>
-            <Text style={styles.cardTitle}>✂️ Select Services</Text>
+            <Text style={styles.cardTitle}>Select Services</Text>
             <View style={styles.servicesSummary}>
               {selectedServices.length > 0 && (
                 <Text style={styles.servicesCount}>{selectedServices.length} selected</Text>
@@ -310,34 +311,38 @@ export default function BookNow() {
           </TouchableOpacity>
           
           <Collapsible collapsed={servicesCollapsed}>
-            <View style={styles.servicesGrid}>
-              {shopDetails.services.map(service => (
-                <TouchableOpacity
-                  key={service.id}
-                  style={[
-                    styles.serviceItem,
-                    selectedServices.some(s => s.id === service.id) && styles.selectedService
-                  ]}
-                  onPress={() => toggleService(service)}
-                  activeOpacity={0.7}>
-                  <View style={styles.serviceHeader}>
-                    <Text style={styles.serviceName}>{service.name}</Text>
-                    {selectedServices.some(s => s.id === service.id) && (
-                      <Text style={styles.serviceCheckmark}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={styles.servicePrice}>₹{service.price}</Text>
-                  <Text style={styles.serviceDuration}>⏱️ {service.duration} min</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
+            {shopDetails.services.length > 0 ? (
+              <View style={styles.servicesGrid}>
+                {shopDetails.services.map(service => (
+                  <TouchableOpacity
+                    key={service.id}
+                    style={[
+                      styles.serviceItem,
+                      selectedServices.some(s => s.id === service.id) && styles.selectedService
+                    ]}
+                    onPress={() => toggleService(service)}
+                    activeOpacity={0.7}>
+                    <View style={styles.serviceHeader}>
+                      <Text style={styles.serviceName}>{service.name}</Text>
+                      {selectedServices.some(s => s.id === service.id) && (
+                        <Text style={styles.serviceCheckmark}>✓</Text>
+                      )}
+                    </View>
+                    <Text style={styles.servicePrice}>₹{service.price}</Text>
+                    <Text style={styles.serviceDuration}>{service.duration} min</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ) : (
+              <Text style={styles.noItemsText}>No services available at this shop</Text>
+            )}
           </Collapsible>
 
           {selectedServices.length > 0 && (
             <View style={styles.servicesSummaryCard}>
               <Text style={styles.summaryTitle}>Selected Services Summary</Text>
               <Text style={styles.summaryText}>
-                {selectedServices.length} services • ⏱️ {totalDuration} min total
+                {selectedServices.length} services • {totalDuration} min total
               </Text>
             </View>
           )}
@@ -346,7 +351,7 @@ export default function BookNow() {
         {/* Date & Time Selection */}
         <View style={styles.card}>
           <View style={styles.cardTitleContainer}>
-            <Text style={styles.cardTitle}>📅 Select Date & Time</Text>
+            <Text style={styles.cardTitle}>Select Date & Time</Text>
             {selectedDate && selectedTimeSlot && <Text style={styles.checkmark}>✓</Text>}
           </View>
           
@@ -355,7 +360,7 @@ export default function BookNow() {
             onPress={showDatePicker}
             activeOpacity={0.7}>
             <Text style={selectedDate ? styles.dateText : styles.datePlaceholder}>
-              {selectedDate ? `📅 ${selectedDate.toDateString()}` : "📅 Choose a date"}
+              {selectedDate ? selectedDate.toDateString() : "Choose a date"}
             </Text>
           </TouchableOpacity>
 
@@ -380,7 +385,6 @@ export default function BookNow() {
                     ]}
                     onPress={() => setSelectedTimeSlot(slot)}
                     activeOpacity={0.7}>
-                    <Text style={styles.timeSlotIcon}>{slot.icon}</Text>
                     <Text style={styles.timeSlotName}>{slot.name}</Text>
                     <Text style={styles.timeSlotHours}>{slot.start} - {slot.end}</Text>
                   </TouchableOpacity>
@@ -392,7 +396,7 @@ export default function BookNow() {
 
         {/* Payment Options */}
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>💳 Payment Options</Text>
+          <Text style={styles.cardTitle}>Payment Options</Text>
           
           {totalPrice > 0 && (
             <View style={styles.pricingSummary}>
@@ -416,12 +420,11 @@ export default function BookNow() {
               onPress={() => setPaymentType('advance')}
               activeOpacity={0.7}>
               <View style={styles.paymentOptionHeader}>
-                <Text style={styles.paymentOptionIcon}>💰</Text>
                 <Text style={[
                   styles.paymentOptionText,
                   paymentType === 'advance' && styles.selectedPaymentOptionText
                 ]}>
-                  Pay Advance ₹20
+                  Pay Advance ₹{advanceAmount}
                 </Text>
                 {paymentType === 'advance' && <Text style={styles.checkmark}>✓</Text>}
               </View>
@@ -438,7 +441,6 @@ export default function BookNow() {
               onPress={() => setPaymentType('full')}
               activeOpacity={0.7}>
               <View style={styles.paymentOptionHeader}>
-                <Text style={styles.paymentOptionIcon}>💳</Text>
                 <Text style={[
                   styles.paymentOptionText,
                   paymentType === 'full' && styles.selectedPaymentOptionText
@@ -467,8 +469,8 @@ export default function BookNow() {
           disabled={isBooking || !selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot}
           activeOpacity={0.8}>
           <Text style={styles.bookButtonText}>
-            {isBooking ? '⏳ Processing...' : 
-             paymentType === 'advance' ? `💰 Pay ₹${advanceAmount} & Book` : `💳 Pay ₹${totalPrice} & Book`}
+            {isBooking ? 'Processing...' : 
+             paymentType === 'advance' ? `Pay ₹${advanceAmount} & Book` : `Pay ₹${totalPrice} & Book`}
           </Text>
           {totalPrice > 0 && !isBooking && (
             <Text style={styles.bookButtonSubtext}>
@@ -486,7 +488,7 @@ export default function BookNow() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#ffffff',
   },
   loadingContainer: {
     justifyContent: 'center',
@@ -505,12 +507,12 @@ const styles = StyleSheet.create({
   },
   errorText: {
     fontSize: 16,
-    color: '#FF6B6B',
+    color: '#d32f2f',
     textAlign: 'center',
     marginBottom: 20,
   },
   retryButton: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#d32f2f',
     paddingHorizontal: 20,
     paddingVertical: 10,
     borderRadius: 8,
@@ -520,43 +522,45 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   shopHeader: {
-    backgroundColor: '#FF6B6B',
+    backgroundColor: '#ffffff',
     padding: 20,
     paddingTop: 30,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
   shopName: {
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: 'bold',
-    color: 'white',
+    color: '#333',
     marginBottom: 6,
   },
   shopAddress: {
     fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
+    color: '#666',
     marginBottom: 4,
   },
   shopHours: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     marginBottom: 4,
   },
   progressContainer: {
-    marginTop: 8,
+    marginTop: 16,
   },
   progressBar: {
     height: 4,
-    backgroundColor: 'rgba(255,255,255,0.3)',
+    backgroundColor: '#e0e0e0',
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
-    backgroundColor: 'white',
+    backgroundColor: '#333',
     borderRadius: 2,
   },
   progressText: {
     fontSize: 12,
-    color: 'rgba(255,255,255,0.8)',
+    color: '#666',
     marginTop: 4,
     textAlign: 'center',
   },
@@ -566,14 +570,11 @@ const styles = StyleSheet.create({
   },
   card: {
     backgroundColor: 'white',
-    borderRadius: 16,
-    padding: 20,
+    borderRadius: 8,
+    padding: 16,
     marginBottom: 16,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
   },
   cardTitleContainer: {
     flexDirection: 'row',
@@ -582,12 +583,12 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FF6B6B',
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
   },
   checkmark: {
-    fontSize: 20,
+    fontSize: 18,
     color: '#4CAF50',
     fontWeight: 'bold',
   },
@@ -598,34 +599,31 @@ const styles = StyleSheet.create({
   },
   barberItem: {
     width: '48%',
-    padding: 16,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
     marginBottom: 12,
     backgroundColor: 'white',
-    alignItems: 'center',
   },
   selectedBarber: {
-    borderColor: '#FF6B6B',
-    backgroundColor: '#fff5f5',
-    transform: [{ scale: 1.02 }],
-  },
-  barberAvatar: {
-    fontSize: 32,
-    marginBottom: 8,
+    borderColor: '#333',
+    backgroundColor: '#f5f5f5',
   },
   barberName: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
     marginBottom: 4,
-    textAlign: 'center',
   },
   barberPlace: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
+  },
+  noItemsText: {
     textAlign: 'center',
+    color: '#666',
+    paddingVertical: 16,
   },
   servicesSummary: {
     flexDirection: 'row',
@@ -643,7 +641,7 @@ const styles = StyleSheet.create({
   },
   collapseIcon: {
     fontSize: 16,
-    color: '#FF6B6B',
+    color: '#333',
   },
   servicesGrid: {
     flexDirection: 'row',
@@ -652,17 +650,16 @@ const styles = StyleSheet.create({
   },
   serviceItem: {
     width: '48%',
-    padding: 14,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
     marginBottom: 12,
     backgroundColor: 'white',
   },
   selectedService: {
-    borderColor: '#FF6B6B',
-    backgroundColor: '#fff5f5',
-    transform: [{ scale: 1.02 }],
+    borderColor: '#333',
+    backgroundColor: '#f5f5f5',
   },
   serviceHeader: {
     flexDirection: 'row',
@@ -672,7 +669,7 @@ const styles = StyleSheet.create({
   },
   serviceName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
     flex: 1,
   },
@@ -682,17 +679,17 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   servicePrice: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: 'bold',
-    color: '#FF6B6B',
+    color: '#333',
     marginBottom: 4,
   },
   serviceDuration: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
   },
   servicesSummaryCard: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
     padding: 12,
     borderRadius: 8,
     marginTop: 12,
@@ -704,20 +701,20 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   summaryText: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
   },
   dateButton: {
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
     padding: 16,
     marginBottom: 16,
     backgroundColor: 'white',
   },
   dateButtonSelected: {
-    borderColor: '#FF6B6B',
-    backgroundColor: '#fff5f5',
+    borderColor: '#333',
+    backgroundColor: '#f5f5f5',
   },
   dateText: {
     fontSize: 16,
@@ -741,37 +738,31 @@ const styles = StyleSheet.create({
   },
   timeSlot: {
     width: '48%',
-    padding: 14,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 12,
+    padding: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
     marginBottom: 10,
     backgroundColor: 'white',
-    alignItems: 'center',
   },
   selectedTimeSlot: {
-    borderColor: '#FF6B6B',
-    backgroundColor: '#fff5f5',
-    transform: [{ scale: 1.02 }],
-  },
-  timeSlotIcon: {
-    fontSize: 20,
-    marginBottom: 4,
+    borderColor: '#333',
+    backgroundColor: '#f5f5f5',
   },
   timeSlotName: {
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
     marginBottom: 4,
   },
   timeSlotHours: {
-    fontSize: 12,
+    fontSize: 14,
     color: '#666',
   },
   pricingSummary: {
-    backgroundColor: '#f8f9fa',
+    backgroundColor: '#f5f5f5',
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 16,
   },
   paymentRow: {
@@ -787,67 +778,63 @@ const styles = StyleSheet.create({
   paymentValue: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#FF6B6B',
+    color: '#333',
   },
   paymentOptionsContainer: {
     gap: 12,
   },
   paymentOption: {
     padding: 16,
-    borderWidth: 2,
-    borderColor: '#f0f0f0',
-    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e0e0e0',
+    borderRadius: 8,
     backgroundColor: 'white',
   },
   selectedPaymentOption: {
-    borderColor: '#FF6B6B',
-    backgroundColor: '#fff5f5',
+    borderColor: '#333',
+    backgroundColor: '#f5f5f5',
   },
   paymentOptionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 4,
   },
-  paymentOptionIcon: {
-    fontSize: 18,
-    marginRight: 8,
-  },
   paymentOptionText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '500',
     color: '#333',
     flex: 1,
   },
   selectedPaymentOptionText: {
-    color: '#FF6B6B',
+    fontWeight: '600',
   },
   paymentOptionSubtext: {
-    fontSize: 13,
+    fontSize: 14,
     color: '#666',
-    marginLeft: 26,
+    marginLeft: 0,
   },
   footer: {
     padding: 16,
     backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#f0f0f0',
+    borderTopColor: '#e0e0e0',
   },
   bookButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 16,
-    padding: 20,
+    backgroundColor: '#333',
+    borderRadius: 8,
+    padding: 16,
     alignItems: 'center',
   },
   bookButtonLoading: {
-    backgroundColor: '#FFB6B6',
+    backgroundColor: '#666',
   },
   bookButtonDisabled: {
     backgroundColor: '#cccccc',
   },
   bookButtonText: {
     color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
+    fontSize: 16,
+    fontWeight: '600',
   },
   bookButtonSubtext: {
     color: 'rgba(255,255,255,0.8)',

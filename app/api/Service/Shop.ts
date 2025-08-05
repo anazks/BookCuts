@@ -32,4 +32,14 @@ export const getmyBarbers = async (shopId: string) => {
     throw error?.response?.data || { message: "Failed to fetch barbers" };
   }
 }
+export const getShopServices = async (shopId: string) => {
+  try {
+    const response = await Axios.get(`/shop/viewMyService/${shopId}`);
+    console.log("Response from getShopServices:", response);
+    return response.data;
+  } catch (error: any) {
+    throw error?.response?.data || { message: "Failed to fetch shop services" };
+  }
+}
+
 
