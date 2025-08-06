@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { getmyProfile } from '../api/Service/User';
@@ -99,15 +100,19 @@ export default function Profile() {
 
       {/* Menu Items */}
       <View style={styles.menuContainer}>
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem}
+          onPress={()=>router.push('/Screens/User/Rewards')}
+        >
           <View style={styles.menuIconContainer}>
             <Ionicons name="person-outline" size={20} color="#2563eb" />
           </View>
-          <Text style={styles.menuText}>Personal Information</Text>
+          <Text style={styles.menuText}>Rewards</Text>
           <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem}
+          onPress={()=>router.push('/Screens/User/Payment')}
+        >
           <View style={styles.menuIconContainer}>
             <Ionicons name="card-outline" size={20} color="#2563eb" />
           </View>
@@ -115,7 +120,9 @@ export default function Profile() {
           <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem}
+          onPress={()=>router.push('/Screens/User/Bookings')}
+        >
           <View style={styles.menuIconContainer}>
             <Ionicons name="time-outline" size={20} color="#2563eb" />
           </View>
@@ -123,7 +130,9 @@ export default function Profile() {
           <Ionicons name="chevron-forward" size={16} color="#94a3b8" />
         </TouchableOpacity>
 
-        <TouchableOpacity style={styles.menuItem}>
+        <TouchableOpacity style={styles.menuItem}
+          onPress={()=>router.push('/Screens/User/Support')}
+        >
           <View style={styles.menuIconContainer}>
             <Ionicons name="help-circle-outline" size={20} color="#2563eb" />
           </View>

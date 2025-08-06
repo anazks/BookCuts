@@ -28,6 +28,7 @@ const Home = () => {
       setLoading(true);
       setError(null);
       const result = await getAllShops();
+      console.log("Shops Response:", result);
       if (result && result.success) {
         setShops(result.data);
       } else {
@@ -63,45 +64,72 @@ const Home = () => {
     getProfile();
   }, []);
 
-  // Transform API data to match UI requirements
+  // Enhanced transform function to handle all shop data structures
   const transformShopData = (apiShops) => {
-    return apiShops.map((shop, index) => ({
-      id: shop._id || shop.shopId || index.toString(),
-      name: shop.ShopName || `${shop.firstName} ${shop.lastName}`.trim() || 'Unknown Shop',
-      rating: '4.5',
-      services: 'Haircut, Beard, Styling',
-      price: '$25-45',
-      distance: `${(Math.random() * 2 + 0.5).toFixed(1)} km`,
-      city: shop.City || shop.city || 'Unknown City',
-      timing: shop.Timing || '9am - 8pm',
-      mobile: shop.Mobile || shop.mobileNo || '',
-      website: shop.website || '',
-      email: shop.email || '',
-      image: `https://images.unsplash.com/photo-${1595476108010 + (index * 1000)}?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60`
-    }));
+    return apiShops.map((shop, index) => {
+      let shopName = 'Unknown Shop';
+      
+      // Priority: ShopName > firstName + lastName > fallback
+      if (shop.ShopName && shop.ShopName.trim()) {
+        shopName = shop.ShopName.trim();
+      } else if (shop.firstName || shop.lastName) {
+        const firstName = shop.firstName ? shop.firstName.trim() : '';
+        const lastName = shop.lastName ? shop.lastName.trim() : '';
+        shopName = `${firstName} ${lastName}`.trim();
+        if (!shopName) {
+          shopName = 'Unknown Shop';
+        }
+      }
+
+      return {
+        id: shop._id || shop.shopId || index.toString(),
+        name: shopName,
+        rating: '4.5',
+        services: 'Haircut, Beard, Styling',
+        price: '$25-45',
+        distance: `${(Math.random() * 2 + 0.5).toFixed(1)} km`,
+        city: shop.City || shop.city || 'Unknown City',
+        timing: shop.Timing || '9am - 8pm',
+        mobile: shop.Mobile || shop.mobileNo || '',
+        website: shop.website || '',
+        email: shop.email || '',
+        image: `https://images.unsplash.com/photo-${1595476108010 + (index * 1000)}?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60`
+      };
+    });
   };
 
-  // Get popular shops (first 6 shops)
+  // Get popular shops (first 8 shops to show more)
   const getPopularShops = () => {
     const transformedShops = transformShopData(shops);
-    return transformedShops.slice(0, 6);
+    return transformedShops.slice(0, 8);
   };
 
-  // Get top rated shops
+  // Get top rated shops (show more variety)
   const getTopRatedShops = () => {
     const transformedShops = transformShopData(shops);
-    const topRated = transformedShops.filter(shop => 
-      ['Kochi', 'Salem', 'Kerala'].includes(shop.city)
-    ).slice(0, 4);
     
-    if (topRated.length < 4) {
-      const remaining = transformedShops.filter(shop => 
-        !['Kochi', 'Salem', 'Kerala'].includes(shop.city)
-      ).slice(0, 4 - topRated.length);
-      return [...topRated, ...remaining];
-    }
+    // First, get shops from preferred cities
+    const preferredCityShops = transformedShops.filter(shop => 
+      ['Kochi', 'Salem', 'Kerala', 'kochi', 'salem', 'kerala'].some(city => 
+        shop.city.toLowerCase().includes(city.toLowerCase())
+      )
+    );
     
-    return topRated;
+    // Then get remaining shops
+    const otherShops = transformedShops.filter(shop => 
+      !['Kochi', 'Salem', 'Kerala', 'kochi', 'salem', 'kerala'].some(city => 
+        shop.city.toLowerCase().includes(city.toLowerCase())
+      )
+    );
+    
+    // Combine and take first 8 (or all if less than 8)
+    const combinedShops = [...preferredCityShops, ...otherShops];
+    return combinedShops.slice(0, Math.min(8, combinedShops.length));
+  };
+
+  // Get all shops for a comprehensive view
+  const getAllTransformedShops = () => {
+    return transformShopData(shops);
   };
 
   // Sample trending designs data
@@ -134,13 +162,14 @@ const Home = () => {
   ];
 
   // Handle shop card press
-const handleShopPress = (shop) => {
-  console.log('Shop pressed:', shop);
-  router.push({
-    pathname: '/Screens/User/BookNow',
-    params: { shop_id: shop.id }
-  });
-};
+  const handleShopPress = (shop) => {
+    console.log('Shop pressed:', shop);
+    router.push({
+      pathname: '/Screens/User/BookNow',
+      params: { shop_id: shop.id }
+    });
+  };
+
   // Handle refresh
   const handleRefresh = () => {
     getShops();
@@ -338,6 +367,52 @@ const handleShopPress = (shop) => {
           </View>
         )}
 
+        {/* All Shops Section - NEW ADDITION */}
+        {shops.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>All Available Shops</Text>
+              <Text style={styles.shopsCountSmall}>({shops.length} shops)</Text>
+            </View>
+            <FlatList
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              data={getAllTransformedShops()}
+              keyExtractor={(item) => item.id}
+              contentContainerStyle={styles.horizontalListContainer}
+              renderItem={({ item }) => (
+                <TouchableOpacity 
+                  style={styles.shopCard}
+                  onPress={() => handleShopPress(item)}
+                >
+                  <View style={styles.shopImageContainer}>
+                    <Image 
+                      source={{ uri: item.image }} 
+                      style={styles.shopImage} 
+                      resizeMode="cover"
+                    />
+                    <View style={styles.distanceBadge}>
+                      <Text style={styles.distanceText}>{item.distance}</Text>
+                    </View>
+                  </View>
+                  <View style={styles.shopDetails}>
+                    <Text style={styles.shopName} numberOfLines={1}>{item.name}</Text>
+                    <View style={styles.ratingPriceContainer}>
+                      <View style={styles.ratingContainer}>
+                        <Ionicons name="star" size={14} color="#FFD700" />
+                        <Text style={styles.ratingText}>{item.rating}</Text>
+                      </View>
+                      <Text style={styles.priceText}>{item.price}</Text>
+                    </View>
+                    <Text style={styles.servicesText} numberOfLines={1}>{item.services}</Text>
+                    <Text style={styles.cityText} numberOfLines={1}>{item.city}</Text>
+                  </View>
+                </TouchableOpacity>
+              )}
+            />
+          </View>
+        )}
+
         {/* Trending Designs Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -507,6 +582,11 @@ const styles = StyleSheet.create({
     color: '#FF6B6B',
     fontWeight: '500',
     marginTop: 4,
+  },
+  shopsCountSmall: {
+    fontSize: 12,
+    color: '#999',
+    fontWeight: '400',
   },
   searchContainer: {
     marginHorizontal: 20,
@@ -770,7 +850,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   bottomSpacing: {
-    height: 20,
+    height: 60,
   },
 });
 

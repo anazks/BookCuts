@@ -1,0 +1,21 @@
+import Axios from '../axios';
+
+export const SlotBooking = async (data: any) => {
+    try {
+        const response = await Axios.post('/booking/BookNow',data);
+        console.log("Response from BookNow:", response);
+        return response.data;
+    } catch (error: any) {
+        throw error?.response?.data || { message: "Booking failed" };
+    }
+}
+
+export const myBookings = async ()=>{
+   try {
+        const response = await Axios.post('/booking/myBookings');
+        console.log("Response from myBookings:", response);
+        return response.data;
+   } catch (error) {
+      
+   }
+}

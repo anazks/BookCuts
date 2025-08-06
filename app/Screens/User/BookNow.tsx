@@ -3,8 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Collapsible from 'react-native-collapsible';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
+import { SlotBooking } from '../../api/Service/Booking';
 import { getmyBarbers, getShopById, getShopServices } from '../../api/Service/Shop';
-
 const parseTime = (timeStr: string): string => {
   timeStr = timeStr.trim().toLowerCase();
   const match = timeStr.match(/(\d+)([ap]m)/);
@@ -183,8 +183,8 @@ export default function BookNow() {
     try {
       const formData = prepareFormData();
       console.log("Booking Form Data:", JSON.stringify(formData, null, 2));
-      
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      let response = await SlotBooking(formData);
+      // await new Promise(resolve => setTimeout(resolve, 2000));
       
       Alert.alert(
         "Booking Confirmed", 

@@ -5,7 +5,9 @@ import {
   ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   SafeAreaView,
   StyleSheet,
   Text,
@@ -20,6 +22,7 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
 
   const handleLogin = async () => {
     if (!email.trim()) {
@@ -49,15 +52,8 @@ export default function Login() {
         response.result.token &&
         !response.result.message
       ) {
-        // Store the token
         await AsyncStorage.setItem('accessToken', response.result.token);
-         router.replace('/(tabs)/Home')
-        Alert.alert('Success', 'Login successful!', [
-          {
-            text: 'Continue',
-            onPress: () => router.replace('/(tabs)/Home')
-          }
-        ]);
+        setShowUserTypeModal(true); // Show modal to confirm user type
       } else {
         const errorMessage =
           response.result?.message || response.message || 'Invalid login details.';
@@ -75,6 +71,15 @@ export default function Login() {
     }
   };
 
+  const handleUserTypeSelection = (isShopOwner) => {
+    setShowUserTypeModal(false);
+    if (isShopOwner) {
+      router.push('../shop/login');
+    } else {
+      router.replace('/(tabs)/Home');
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <KeyboardAvoidingView
@@ -82,9 +87,11 @@ export default function Login() {
         style={styles.keyboardAvoidingView}
         keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
-        <View style={styles.header}>
-          <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Login to your account</Text>
+        {/* Logo Header */}
+        <View style={styles.logoContainer}>
+          <Text style={styles.logoText}>BookMyCuts</Text>
+          <Text style={styles.welcomeText}>Welcome Back</Text>
+          <Text style={styles.loginText}>Login to continue</Text>
         </View>
 
         <View style={styles.form}>
@@ -125,7 +132,11 @@ export default function Login() {
             </View>
           </View>
 
-          <TouchableOpacity style={styles.forgotPassword} disabled={isLoading}>
+          <TouchableOpacity 
+            style={styles.forgotPassword} 
+            disabled={isLoading}
+            onPress={() => router.push('/forgot-password')}
+          >
             <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
           </TouchableOpacity>
 
@@ -143,6 +154,20 @@ export default function Login() {
               <Text style={styles.loginButtonText}>Login</Text>
             )}
           </TouchableOpacity>
+
+          <View style={styles.dividerContainer}>
+            <View style={styles.dividerLine} />
+            <Text style={styles.dividerText}>OR</Text>
+            <View style={styles.dividerLine} />
+          </View>
+
+          <TouchableOpacity
+            style={styles.shopOwnerButton}
+            onPress={() => router.push('/Screens/Shop/Login')}
+            disabled={isLoading}
+          >
+            <Text style={styles.shopOwnerButtonText}>Are you a Shop Owner?</Text>
+          </TouchableOpacity>
         </View>
 
         <View style={styles.footer}>
@@ -154,6 +179,36 @@ export default function Login() {
             <Text style={styles.signupText}>Sign Up</Text>
           </TouchableOpacity>
         </View>
+
+        {/* User Type Confirmation Modal */}
+        <Modal
+          animationType="fade"
+          transparent={true}
+          visible={showUserTypeModal}
+          onRequestClose={() => setShowUserTypeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <Text style={styles.modalTitle}>Are you a Shop Owner?</Text>
+              <Text style={styles.modalSubtitle}>Please confirm your account type</Text>
+              
+              <View style={styles.modalButtonContainer}>
+                <Pressable
+                  style={[styles.modalButton, styles.customerButton]}
+                  onPress={() => handleUserTypeSelection(false)}
+                >
+                  <Text style={styles.modalButtonText}>No, I'm a Customer</Text>
+                </Pressable>
+                <Pressable
+                  style={[styles.modalButton, styles.shopOwnerModalButton]}
+                  onPress={() => handleUserTypeSelection(true)}
+                >
+                  <Text style={styles.modalButtonText}>Yes, I'm a Shop Owner</Text>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -168,18 +223,24 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
   },
-  header: {
+  logoContainer: {
+    alignItems: 'center',
     marginBottom: 40,
     paddingHorizontal: 24,
-    alignItems: 'center',
   },
-  title: {
-    fontSize: 28,
+  logoText: {
+    fontSize: 32,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#FF6B6B',
     marginBottom: 8,
   },
-  subtitle: {
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  loginText: {
     fontSize: 16,
     color: '#666',
   },
@@ -223,7 +284,7 @@ const styles = StyleSheet.create({
     padding: 10,
   },
   visibilityText: {
-    color: '#007AFF',
+    color: '#FF6B6B',
     fontWeight: '500',
   },
   forgotPassword: {
@@ -231,7 +292,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   forgotPasswordText: {
-    color: '#007AFF',
+    color: '#FF6B6B',
     fontSize: 14,
   },
   loginButton: {
@@ -240,7 +301,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 24,
+    marginBottom: 16,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
   },
   loginButtonDisabled: {
     opacity: 0.7,
@@ -248,6 +314,35 @@ const styles = StyleSheet.create({
   loginButtonText: {
     color: '#fff',
     fontSize: 18,
+    fontWeight: '600',
+  },
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#ddd',
+  },
+  dividerText: {
+    paddingHorizontal: 10,
+    color: '#666',
+    fontSize: 14,
+  },
+  shopOwnerButton: {
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
+    height: 50,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  shopOwnerButtonText: {
+    color: '#FF6B6B',
+    fontSize: 16,
     fontWeight: '600',
   },
   footer: {
@@ -262,6 +357,53 @@ const styles = StyleSheet.create({
   signupText: {
     color: '#FF6B6B',
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContainer: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 24,
+    width: '100%',
+    maxWidth: 350,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  modalButtonContainer: {
+    flexDirection: 'column',
+    gap: 12,
+  },
+  modalButton: {
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  customerButton: {
+    backgroundColor: '#f0f0f0',
+  },
+  shopOwnerModalButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  modalButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
