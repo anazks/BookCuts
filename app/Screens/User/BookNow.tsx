@@ -1,13 +1,12 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Collapsible from 'react-native-collapsible';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SlotBooking } from '../../api/Service/Booking';
 import { getmyBarbers, getShopById, getShopServices } from '../../api/Service/Shop';
-import RazorpayCheckout from 'react-native-razorpay';
 
-const parseTime = (timeStr: string): string => {
+const parseTime = (timeStr) => {
   timeStr = timeStr.trim().toLowerCase();
   const match = timeStr.match(/(\d+)([ap]m)/);
 
@@ -34,51 +33,64 @@ export default function BookNow() {
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
   const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
-  const [paymentType, setPaymentType] = useState('advance');
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [error, setError] = useState(null);
+  const [apiErrors, setApiErrors] = useState({ services: false, barbers: false });
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
+  // Fetch shop data
   useEffect(() => {
     const fetchShopData = async () => {
       try {
         setLoading(true);
         setError(null);
+        setApiErrors({ services: false, barbers: false });
 
         const shopResponse = await getShopById(shop_id);
-        console.log("Shop API Response:", shopResponse);
-
-        if (!shopResponse?.success || !shopResponse.data?.length) {
-          throw new Error(shopResponse?.message || "Failed to load shop details");
-        }
+        if (!shopResponse?.success) throw new Error(shopResponse?.message || "Failed to load shop");
 
         const shopData = shopResponse.data[0];
         const times = shopData.Timing?.split('-')?.map(t => t.trim()) || [];
         const openingTime = times.length > 0 ? parseTime(times[0]) : '09:00';
         const closingTime = times.length > 1 ? parseTime(times[1]) : '21:00';
 
-        const [servicesResponse, barbersResponse] = await Promise.all([
-          getShopServices(shop_id),
-          getmyBarbers(shop_id)
-        ]);
+        // Fetch services and barbers
+        let services = [];
+        let barbers = [];
+        let servicesError = false;
+        let barbersError = false;
 
-        const services = servicesResponse?.success && servicesResponse.data
-          ? servicesResponse.data.map(service => ({
-            id: service._id,
-            name: service.ServiceName,
-            price: parseInt(service.Rate, 10) || 0,
-            duration: 30
-          }))
-          : [];
+        try {
+          const servicesResponse = await getShopServices(shop_id);
+          if (servicesResponse?.success) {
+            services = servicesResponse.data.map(service => ({
+              id: service._id,
+              name: service.ServiceName,
+              price: parseInt(service.Rate, 10) || 0,
+              duration: 30
+            }));
+          } else servicesError = true;
+        } catch (e) {
+          servicesError = true;
+          console.error("Error fetching services:", e);
+        }
 
-        const barbers = barbersResponse?.success && barbersResponse.data
-          ? barbersResponse.data.map(barber => ({
-            id: barber._id,
-            name: barber.BarBarName,
-            nativePlace: barber.From
-          }))
-          : [];
+        try {
+          const barbersResponse = await getmyBarbers(shop_id);
+          if (barbersResponse?.success) {
+            barbers = barbersResponse.data.map(barber => ({
+              id: barber._id,
+              name: barber.BarberName,
+              nativePlace: barber.From
+            }));
+          } else barbersError = true;
+        } catch (e) {
+          barbersError = true;
+          console.error("Error fetching barbers:", e);
+        }
 
+        setApiErrors({ services: servicesError, barbers: barbersError });
         setShopDetails({
           id: shopData._id,
           name: shopData.ShopName,
@@ -91,16 +103,14 @@ export default function BookNow() {
         });
 
       } catch (error) {
-        console.error("Error fetching shop data:", error);
         setError(error.message || "Failed to load shop details");
       } finally {
         setLoading(false);
       }
     };
 
-    if (shop_id) {
-      fetchShopData();
-    } else {
+    if (shop_id) fetchShopData();
+    else {
       setError('No shop ID provided');
       setLoading(false);
     }
@@ -108,7 +118,6 @@ export default function BookNow() {
 
   const getTimeSlots = () => {
     if (!shopDetails) return [];
-
     return [
       { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00" },
       { id: 2, name: "Noon", start: "12:00", end: "15:00" },
@@ -117,52 +126,17 @@ export default function BookNow() {
     ];
   };
 
-  const totalPrice = selectedServices.reduce((sum, service) => sum + service.price, 0);
-  const totalDuration = selectedServices.reduce((sum, service) => sum + service.duration, 0);
-  const advanceAmount = Math.min(20, totalPrice);
-
-  const prepareFormData = () => {
-    return {
-      shopId: shopDetails.id,
-      shopName: shopDetails.name,
-      barberId: selectedBarber?.id,
-      barberName: selectedBarber?.name,
-      barberNativePlace: selectedBarber?.nativePlace,
-      serviceIds: selectedServices.map(s => s.id),
-      services: selectedServices.map(service => ({
-        id: service.id,
-        name: service.name,
-        price: service.price,
-        duration: service.duration
-      })),
-      bookingDate: selectedDate?.toISOString().split('T')[0],
-      timeSlotId: selectedTimeSlot?.id,
-      timeSlotName: selectedTimeSlot?.name,
-      timeSlotStart: selectedTimeSlot?.start,
-      timeSlotEnd: selectedTimeSlot?.end,
-      totalPrice,
-      totalDuration,
-      paymentType,
-      amountToPay: paymentType === 'advance' ? advanceAmount : totalPrice,
-      remainingAmount: paymentType === 'advance' ? totalPrice - advanceAmount : 0,
-      bookingTimestamp: new Date().toISOString(),
-      currency: 'INR'
-    };
-  };
-
-  const showDatePicker = () => setDatePickerVisibility(true);
-  const hideDatePicker = () => setDatePickerVisibility(false);
-  const handleConfirm = (date) => {
-    setSelectedDate(date);
-    hideDatePicker();
-  };
+  const totalPrice = selectedServices.reduce((sum, service) => sum + (service.price || 0), 0);
+  const totalDuration = selectedServices.reduce((sum, service) => sum + (service.duration || 30), 0);
 
   const toggleService = (service) => {
-    if (selectedServices.some(s => s.id === service.id)) {
-      setSelectedServices(selectedServices.filter(s => s.id !== service.id));
-    } else {
-      setSelectedServices([...selectedServices, service]);
-    }
+    setSelectedServices(prevServices => {
+      if (prevServices.some(s => s.id === service.id)) {
+        return prevServices.filter(s => s.id !== service.id);
+      } else {
+        return [...prevServices, service];
+      }
+    });
   };
 
   const validateBooking = () => {
@@ -172,94 +146,96 @@ export default function BookNow() {
     if (!selectedTimeSlot) return "Please select a time slot";
     return null;
   };
-  //old code
-  // const handleBookNow = async () => {
-  //   const validationError = validateBooking();
-  //   if (validationError) {
-  //     Alert.alert("Incomplete Booking", validationError);
-  //     return;
-  //   }
 
-  //   setIsBooking(true);
+  const prepareBookingData = () => {
+    const bookingDateStr = selectedDate?.toISOString().split('T')[0];
+    const startTime = new Date(`${bookingDateStr}T${selectedTimeSlot?.start}:00`);
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + totalDuration);
 
-  //   try {
-  //     const formData = prepareFormData();
-  //     console.log("Booking Form Data:", JSON.stringify(formData, null, 2));
-  //     let response = await SlotBooking(formData);
-  //     // await new Promise(resolve => setTimeout(resolve, 2000));
-
-  //     Alert.alert(
-  //       "Booking Confirmed", 
-  //       `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
-  //       [{ text: "OK", style: "default" }]
-  //     );
-
-  //   } catch (error) {
-  //     Alert.alert("Booking Failed", "Something went wrong. Please try again.");
-  //     console.error("Booking error:", error);
-  //   } finally {
-  //     setIsBooking(false);
-  //   }
-  // };
-
-  //new code
-  const handleBookNow = async () => {
-    const validationError = validateBooking();
-    if (validationError) {
-      Alert.alert("Incomplete Booking", validationError);
-      return;
-    }
-
-    const formData = prepareFormData();
-
-    const amountInPaise = formData.amountToPay * 100;
-
-    const options = {
-      description: 'Booking at ' + formData.shopName,
-      // image: 'https://your-logo-url.png', // optional
+    return {
+      barberId: selectedBarber?.id,
+      barberName: selectedBarber?.name || 'Unknown Barber',
+      barberNativePlace: selectedBarber?.nativePlace || 'Unknown',
+      shopId: shopDetails.id,
+      shopName: shopDetails.name,
+      serviceIds: selectedServices.map(s => s.id),
+      services: selectedServices.map(service => ({
+        id: service.id,
+        name: service.name || 'Unknown Service',
+        price: service.price || 0,
+        duration: service.duration || 30
+      })),
+      bookingDate: bookingDateStr,
+      timeSlotId: selectedTimeSlot?.id,
+      timeSlotName: selectedTimeSlot?.name || 'Unknown Slot',
+      timeSlotStart: selectedTimeSlot?.start || '00:00',
+      timeSlotEnd: selectedTimeSlot?.end || '00:00',
+      startTime: startTime.toISOString(),
+      endTime: endTime.toISOString(),
+      totalPrice,
+      totalDuration,
+      paymentType: 'full',
+      amountToPay: totalPrice,
+      remainingAmount: 0,
       currency: 'INR',
-      key: 'YOUR_RAZORPAY_KEY_ID', // replace with your Razorpay Key ID
-      amount: amountInPaise.toString(),
-      name: 'Book My Cuts',
-      prefill: {
-        email: 'test@example.com', // optional, get from user profile if available
-        contact: '9876543210',     // optional, get from user
-        name: 'Customer Name'      // optional, get from user
-      },
-      theme: { color: '#0ea5e9' }
+      bookingTimestamp: new Date().toISOString(),
+      bookingStatus: 'pending',
+      paymentStatus: 'unpaid',
+      amountPaid: 0
     };
+  };
 
-    RazorpayCheckout.open(options)
-      .then(async (paymentData) => {
-        // paymentData.razorpay_payment_id
+  const handleBookNow = () => {
+    const validationError = validateBooking();
+    if (validationError) return Alert.alert("Incomplete Booking", validationError);
+    setShowConfirmation(true);
+  };
 
-        try {
-          setIsBooking(true);
-
-          const finalFormData = {
-            ...formData,
-            razorpayPaymentId: paymentData.razorpay_payment_id,
-          };
-
-          const response = await SlotBooking(finalFormData);
-
-          Alert.alert(
-            "Booking Confirmed",
-            `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount Paid: ₹${formData.amountToPay}`,
-            [{ text: "OK", style: "default" }]
-          );
-
-        } catch (error) {
-          Alert.alert("Booking Failed", "Something went wrong after payment.");
-          console.error("Booking error after payment:", error);
-        } finally {
-          setIsBooking(false);
-        }
-      })
-      .catch((error) => {
-        console.error("Payment failed:", error);
-        Alert.alert("Payment Failed", "Your payment was cancelled or failed.");
-      });
+  const confirmBooking = async () => {
+    setShowConfirmation(false);
+    setIsBooking(true);
+    
+    try {
+      const bookingData = prepareBookingData();
+      console.log('Submitting booking:', bookingData);
+      
+      const response = await SlotBooking(bookingData);
+      
+      if (response.success) {
+        router.push({
+          pathname: '/Screens/User/PayNow',
+          params: {
+            bookingData: JSON.stringify(bookingData),
+            advanceAmount: Math.min(20, totalPrice),
+            totalPrice,
+            barberName: selectedBarber?.name,
+            bookingDate: selectedDate?.toDateString(),
+            timeSlot: selectedTimeSlot?.name
+          }
+        });
+        Alert.alert(
+          "Booking Confirmed", 
+          `Your appointment with ${selectedBarber.name} is confirmed for ${selectedDate.toDateString()}`,
+          [{ text: "OK" }]
+        );
+        // Reset form
+        setSelectedBarber(null);
+        setSelectedServices([]);
+        setSelectedDate(null);
+        setSelectedTimeSlot(null);
+      } else {
+        throw new Error(response.message || "Booking failed");
+      }
+    } catch (error) {
+      console.error('Booking error:', error);
+      Alert.alert(
+        "Booking Error", 
+        error.message || "Failed to complete booking. Please try again."
+      );
+    } finally {
+      setIsBooking(false);
+    }
   };
 
   const getProgressSteps = () => {
@@ -272,7 +248,7 @@ export default function BookNow() {
 
   if (loading) {
     return (
-      <View style={[styles.container, styles.loadingContainer]}>
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#555" />
         <Text style={styles.loadingText}>Loading shop details...</Text>
       </View>
@@ -281,27 +257,9 @@ export default function BookNow() {
 
   if (error || !shopDetails) {
     return (
-      <View style={[styles.container, styles.errorContainer]}>
+      <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error || "Failed to load shop details"}</Text>
-        <TouchableOpacity
-          style={styles.retryButton}
-          onPress={() => {
-            setError(null);
-            setLoading(true);
-            if (shop_id) {
-              const fetchShopData = async () => {
-                try {
-                  // ... (same fetch logic as in useEffect)
-                } catch (error) {
-                  setError(error.message);
-                } finally {
-                  setLoading(false);
-                }
-              };
-              fetchShopData();
-            }
-          }}
-        >
+        <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -313,13 +271,53 @@ export default function BookNow() {
 
   return (
     <View style={styles.container}>
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmation}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setShowConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Confirm Booking</Text>
+            
+            <View style={styles.bookingSummary}>
+              <Text style={styles.summaryText}>Barber: {selectedBarber?.name}</Text>
+              <Text style={styles.summaryText}>Date: {selectedDate?.toDateString()}</Text>
+              <Text style={styles.summaryText}>Time: {selectedTimeSlot?.name} ({selectedTimeSlot?.start}-{selectedTimeSlot?.end})</Text>
+              <Text style={styles.summaryText}>Services: {selectedServices.map(s => s.name).join(', ')}</Text>
+              <Text style={styles.summaryText}>Duration: {totalDuration} minutes</Text>
+              <Text style={styles.summaryText}>Total: ₹{totalPrice}</Text>
+            </View>
+
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => setShowConfirmation(false)}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={confirmBooking}
+                disabled={isBooking}
+              >
+                <Text style={styles.confirmButtonText}>
+                  {isBooking ? 'Processing...' : 'Confirm Booking'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Main Content */}
       <View style={styles.shopHeader}>
         <Text style={styles.shopName}>{shopDetails.name}</Text>
         <Text style={styles.shopAddress}>{shopDetails.address}</Text>
-        <Text style={styles.shopHours}>
-          Open: {shopDetails.Timing || `${shopDetails.openingTime} - ${shopDetails.closingTime}`}
-        </Text>
-
+        <Text style={styles.shopHours}>Open: {shopDetails.Timing || `${shopDetails.openingTime} - ${shopDetails.closingTime}`}</Text>
+        
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${(progress.completed / progress.total) * 100}%` }]} />
@@ -328,66 +326,70 @@ export default function BookNow() {
         </View>
       </View>
 
-      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+      <ScrollView style={styles.scrollContainer}>
         {/* Barber Selection */}
         <View style={styles.card}>
-          <View style={styles.cardTitleContainer}>
+          <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Select Barber</Text>
             {selectedBarber && <Text style={styles.checkmark}>✓</Text>}
           </View>
-          {shopDetails.barbers.length > 0 ? (
+          
+          {apiErrors.barbers ? (
+            <Text style={styles.errorText}>Failed to load barbers</Text>
+          ) : shopDetails.barbers.length > 0 ? (
             <View style={styles.barberContainer}>
               {shopDetails.barbers.map(barber => (
                 <TouchableOpacity
                   key={barber.id}
                   style={[
                     styles.barberItem,
-                    selectedBarber?.id === barber.id && styles.selectedBarber
+                    selectedBarber?.id === barber.id && styles.selectedItem
                   ]}
                   onPress={() => setSelectedBarber(barber)}
-                  activeOpacity={0.7}>
+                >
                   <Text style={styles.barberName}>{barber.name}</Text>
                   <Text style={styles.barberPlace}>{barber.nativePlace}</Text>
                 </TouchableOpacity>
               ))}
             </View>
           ) : (
-            <Text style={styles.noItemsText}>No barbers available at this shop</Text>
+            <Text style={styles.emptyText}>No barbers available</Text>
           )}
         </View>
 
         {/* Services Selection */}
         <View style={styles.card}>
-          <TouchableOpacity
-            style={styles.cardTitleContainer}
-            onPress={() => setServicesCollapsed(!servicesCollapsed)}>
+          <TouchableOpacity 
+            style={styles.cardHeader}
+            onPress={() => setServicesCollapsed(!servicesCollapsed)}
+          >
             <Text style={styles.cardTitle}>Select Services</Text>
-            <View style={styles.servicesSummary}>
+            <View style={styles.collapseHeader}>
               {selectedServices.length > 0 && (
-                <Text style={styles.servicesCount}>{selectedServices.length} selected</Text>
+                <Text style={styles.selectedCount}>{selectedServices.length} selected</Text>
               )}
-              <Text style={styles.collapseIcon}>
-                {servicesCollapsed ? '▼' : '▲'}
-              </Text>
+              <Text style={styles.collapseIcon}>{servicesCollapsed ? '▼' : '▲'}</Text>
             </View>
           </TouchableOpacity>
 
           <Collapsible collapsed={servicesCollapsed}>
-            {shopDetails.services.length > 0 ? (
+            {apiErrors.services ? (
+              <Text style={styles.errorText}>Failed to load services</Text>
+            ) : shopDetails.services.length > 0 ? (
               <View style={styles.servicesGrid}>
                 {shopDetails.services.map(service => (
                   <TouchableOpacity
                     key={service.id}
                     style={[
                       styles.serviceItem,
-                      selectedServices.some(s => s.id === service.id) && styles.selectedService
+                      selectedServices.some(s => s.id === service.id) && styles.selectedItem
                     ]}
                     onPress={() => toggleService(service)}
-                    activeOpacity={0.7}>
+                  >
                     <View style={styles.serviceHeader}>
                       <Text style={styles.serviceName}>{service.name}</Text>
                       {selectedServices.some(s => s.id === service.id) && (
-                        <Text style={styles.serviceCheckmark}>✓</Text>
+                        <Text style={styles.checkmark}>✓</Text>
                       )}
                     </View>
                     <Text style={styles.servicePrice}>₹{service.price}</Text>
@@ -396,15 +398,15 @@ export default function BookNow() {
                 ))}
               </View>
             ) : (
-              <Text style={styles.noItemsText}>No services available at this shop</Text>
+              <Text style={styles.emptyText}>No services available</Text>
             )}
           </Collapsible>
 
           {selectedServices.length > 0 && (
-            <View style={styles.servicesSummaryCard}>
-              <Text style={styles.summaryTitle}>Selected Services Summary</Text>
+            <View style={styles.servicesSummary}>
+              <Text style={styles.summaryTitle}>Selected Services</Text>
               <Text style={styles.summaryText}>
-                {selectedServices.length} services • {totalDuration} min total
+                {selectedServices.length} services • {totalDuration} min • ₹{totalPrice}
               </Text>
             </View>
           )}
@@ -412,41 +414,44 @@ export default function BookNow() {
 
         {/* Date & Time Selection */}
         <View style={styles.card}>
-          <View style={styles.cardTitleContainer}>
+          <View style={styles.cardHeader}>
             <Text style={styles.cardTitle}>Select Date & Time</Text>
             {selectedDate && selectedTimeSlot && <Text style={styles.checkmark}>✓</Text>}
           </View>
 
           <TouchableOpacity
-            style={[styles.dateButton, selectedDate && styles.dateButtonSelected]}
-            onPress={showDatePicker}
-            activeOpacity={0.7}>
-            <Text style={selectedDate ? styles.dateText : styles.datePlaceholder}>
-              {selectedDate ? selectedDate.toDateString() : "Choose a date"}
+            style={[styles.dateButton, selectedDate && styles.selectedButton]}
+            onPress={() => setDatePickerVisibility(true)}
+          >
+            <Text style={selectedDate ? styles.dateText : styles.placeholderText}>
+              {selectedDate ? selectedDate.toDateString() : "Select date"}
             </Text>
           </TouchableOpacity>
 
           <DateTimePickerModal
             isVisible={isDatePickerVisible}
             mode="date"
-            onConfirm={handleConfirm}
-            onCancel={hideDatePicker}
+            onConfirm={date => {
+              setSelectedDate(date);
+              setDatePickerVisibility(false);
+            }}
+            onCancel={() => setDatePickerVisibility(false)}
             minimumDate={new Date()}
           />
 
           {selectedDate && (
             <>
-              <Text style={styles.timeSlotTitle}>Available Time Slots:</Text>
-              <View style={styles.timeSlotContainer}>
+              <Text style={styles.sectionTitle}>Available Time Slots</Text>
+              <View style={styles.timeSlotsContainer}>
                 {timeSlots.map(slot => (
                   <TouchableOpacity
                     key={slot.id}
                     style={[
                       styles.timeSlot,
-                      selectedTimeSlot?.id === slot.id && styles.selectedTimeSlot
+                      selectedTimeSlot?.id === slot.id && styles.selectedItem
                     ]}
                     onPress={() => setSelectedTimeSlot(slot)}
-                    activeOpacity={0.7}>
+                  >
                     <Text style={styles.timeSlotName}>{slot.name}</Text>
                     <Text style={styles.timeSlotHours}>{slot.start} - {slot.end}</Text>
                   </TouchableOpacity>
@@ -455,92 +460,22 @@ export default function BookNow() {
             </>
           )}
         </View>
-
-        {/* Payment Options */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Payment Options</Text>
-
-          {totalPrice > 0 && (
-            <View style={styles.pricingSummary}>
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Total Services:</Text>
-                <Text style={styles.paymentValue}>₹{totalPrice}</Text>
-              </View>
-              <View style={styles.paymentRow}>
-                <Text style={styles.paymentLabel}>Duration:</Text>
-                <Text style={styles.paymentValue}>{totalDuration} min</Text>
-              </View>
-            </View>
-          )}
-
-          <View style={styles.paymentOptionsContainer}>
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                paymentType === 'advance' && styles.selectedPaymentOption
-              ]}
-              onPress={() => setPaymentType('advance')}
-              activeOpacity={0.7}>
-              <View style={styles.paymentOptionHeader}>
-                <Text style={[
-                  styles.paymentOptionText,
-                  paymentType === 'advance' && styles.selectedPaymentOptionText
-                ]}>
-                  Pay Advance ₹{advanceAmount}
-                </Text>
-                {paymentType === 'advance' && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.paymentOptionSubtext}>
-                Remaining ₹{totalPrice - advanceAmount} at shop
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.paymentOption,
-                paymentType === 'full' && styles.selectedPaymentOption
-              ]}
-              onPress={() => setPaymentType('full')}
-              activeOpacity={0.7}>
-              <View style={styles.paymentOptionHeader}>
-                <Text style={[
-                  styles.paymentOptionText,
-                  paymentType === 'full' && styles.selectedPaymentOptionText
-                ]}>
-                  Pay Full Amount ₹{totalPrice}
-                </Text>
-                {paymentType === 'full' && <Text style={styles.checkmark}>✓</Text>}
-              </View>
-              <Text style={styles.paymentOptionSubtext}>
-                Complete payment now
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
       </ScrollView>
 
-      {/* Fixed Book Now Button */}
+      {/* Book Now Button */}
       <View style={styles.footer}>
         <TouchableOpacity
           style={[
             styles.bookButton,
-            isBooking && styles.bookButtonLoading,
-            (!selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot) && styles.bookButtonDisabled
+            (!selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot) && styles.disabledButton
           ]}
           onPress={handleBookNow}
-          disabled={isBooking || !selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot}
-          activeOpacity={0.8}>
-          <Text style={styles.bookButtonText}>
-            {isBooking ? 'Processing...' :
-              paymentType === 'advance' ? `Pay ₹${advanceAmount} & Book` : `Pay ₹${totalPrice} & Book`}
+          disabled={!selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot}
+        >
+          <Text style={styles.bookButtonText}>Book Now</Text>
+          <Text style={styles.bookButtonSubtext}>
+            {selectedServices.length > 0 && `Total: ₹${totalPrice} • ${totalDuration} min`}
           </Text>
-          {totalPrice > 0 && !isBooking && (
-            <Text style={styles.bookButtonSubtext}>
-              {paymentType === 'advance' ?
-                `Total: ₹${totalPrice} (₹${totalPrice - advanceAmount} remaining)` :
-                `Total: ₹${totalPrice} • ${totalDuration} min`}
-            </Text>
-          )}
         </TouchableOpacity>
       </View>
     </View>
@@ -550,9 +485,10 @@ export default function BookNow() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#ffffff',
+    backgroundColor: '#fff',
   },
   loadingContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -560,9 +496,9 @@ const styles = StyleSheet.create({
     marginTop: 16,
     fontSize: 16,
     color: '#666',
-    fontWeight: '500',
   },
   errorContainer: {
+    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
@@ -570,55 +506,49 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 16,
     color: '#d32f2f',
-    textAlign: 'center',
     marginBottom: 20,
+    textAlign: 'center',
   },
   retryButton: {
     backgroundColor: '#d32f2f',
-    paddingHorizontal: 20,
-    paddingVertical: 10,
+    padding: 12,
     borderRadius: 8,
   },
   retryButtonText: {
-    color: 'white',
+    color: '#fff',
     fontWeight: '600',
   },
   shopHeader: {
-    backgroundColor: '#ffffff',
     padding: 20,
-    paddingTop: 30,
     borderBottomWidth: 1,
-    borderBottomColor: '#e0e0e0',
+    borderBottomColor: '#eee',
   },
   shopName: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 6,
+    marginBottom: 4,
   },
   shopAddress: {
-    fontSize: 15,
+    fontSize: 16,
     color: '#666',
     marginBottom: 4,
   },
   shopHours: {
     fontSize: 14,
     color: '#666',
-    marginBottom: 4,
   },
   progressContainer: {
     marginTop: 16,
   },
   progressBar: {
     height: 4,
-    backgroundColor: '#e0e0e0',
+    backgroundColor: '#eee',
     borderRadius: 2,
     overflow: 'hidden',
   },
   progressFill: {
     height: '100%',
     backgroundColor: '#333',
-    borderRadius: 2,
   },
   progressText: {
     fontSize: 12,
@@ -631,14 +561,14 @@ const styles = StyleSheet.create({
     padding: 16,
   },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: '#fff',
     borderRadius: 8,
     padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#eee',
   },
-  cardTitleContainer: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -647,6 +577,19 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 18,
     fontWeight: '600',
+  },
+  collapseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  selectedCount: {
+    fontSize: 12,
+    color: '#4CAF50',
+    marginRight: 8,
+    fontWeight: '600',
+  },
+  collapseIcon: {
+    fontSize: 16,
     color: '#333',
   },
   checkmark: {
@@ -662,48 +605,19 @@ const styles = StyleSheet.create({
   barberItem: {
     width: '48%',
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
     marginBottom: 12,
-    backgroundColor: 'white',
-  },
-  selectedBarber: {
-    borderColor: '#333',
-    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 8,
   },
   barberName: {
     fontSize: 16,
     fontWeight: '500',
-    color: '#333',
     marginBottom: 4,
   },
   barberPlace: {
     fontSize: 14,
     color: '#666',
-  },
-  noItemsText: {
-    textAlign: 'center',
-    color: '#666',
-    paddingVertical: 16,
-  },
-  servicesSummary: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  servicesCount: {
-    fontSize: 12,
-    color: '#4CAF50',
-    fontWeight: '600',
-    backgroundColor: '#e8f5e8',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  collapseIcon: {
-    fontSize: 16,
-    color: '#333',
   },
   servicesGrid: {
     flexDirection: 'row',
@@ -713,53 +627,48 @@ const styles = StyleSheet.create({
   serviceItem: {
     width: '48%',
     padding: 12,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
     marginBottom: 12,
-    backgroundColor: 'white',
-  },
-  selectedService: {
-    borderColor: '#333',
-    backgroundColor: '#f5f5f5',
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 8,
   },
   serviceHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 6,
+    marginBottom: 8,
   },
   serviceName: {
-    fontSize: 15,
-    fontWeight: '500',
-    color: '#333',
-    flex: 1,
-  },
-  serviceCheckmark: {
     fontSize: 16,
-    color: '#4CAF50',
-    fontWeight: 'bold',
+    fontWeight: '500',
+    flex: 1,
   },
   servicePrice: {
     fontSize: 16,
     fontWeight: 'bold',
-    color: '#333',
     marginBottom: 4,
   },
   serviceDuration: {
     fontSize: 14,
     color: '#666',
   },
-  servicesSummaryCard: {
-    backgroundColor: '#f5f5f5',
-    padding: 12,
-    borderRadius: 8,
+  selectedItem: {
+    borderColor: '#333',
+    backgroundColor: '#f9f9f9',
+  },
+  emptyText: {
+    textAlign: 'center',
+    color: '#666',
+    paddingVertical: 16,
+  },
+  servicesSummary: {
     marginTop: 12,
+    padding: 12,
+    backgroundColor: '#f9f9f9',
+    borderRadius: 8,
   },
   summaryTitle: {
     fontSize: 14,
     fontWeight: '600',
-    color: '#333',
     marginBottom: 4,
   },
   summaryText: {
@@ -767,33 +676,29 @@ const styles = StyleSheet.create({
     color: '#666',
   },
   dateButton: {
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
     padding: 16,
+    borderWidth: 1,
+    borderColor: '#eee',
+    borderRadius: 8,
     marginBottom: 16,
-    backgroundColor: 'white',
   },
-  dateButtonSelected: {
+  selectedButton: {
     borderColor: '#333',
-    backgroundColor: '#f5f5f5',
+    backgroundColor: '#f9f9f9',
   },
   dateText: {
     fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
   },
-  datePlaceholder: {
+  placeholderText: {
     fontSize: 16,
     color: '#999',
   },
-  timeSlotTitle: {
+  sectionTitle: {
     fontSize: 16,
-    color: '#666',
     marginBottom: 12,
-    fontWeight: '500',
+    color: '#666',
   },
-  timeSlotContainer: {
+  timeSlotsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
@@ -801,100 +706,36 @@ const styles = StyleSheet.create({
   timeSlot: {
     width: '48%',
     padding: 12,
+    marginBottom: 12,
     borderWidth: 1,
-    borderColor: '#e0e0e0',
+    borderColor: '#eee',
     borderRadius: 8,
-    marginBottom: 10,
-    backgroundColor: 'white',
-  },
-  selectedTimeSlot: {
-    borderColor: '#333',
-    backgroundColor: '#f5f5f5',
   },
   timeSlotName: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '500',
-    color: '#333',
     marginBottom: 4,
   },
   timeSlotHours: {
     fontSize: 14,
     color: '#666',
   },
-  pricingSummary: {
-    backgroundColor: '#f5f5f5',
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 16,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  paymentLabel: {
-    fontSize: 16,
-    color: '#333',
-    fontWeight: '500',
-  },
-  paymentValue: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  paymentOptionsContainer: {
-    gap: 12,
-  },
-  paymentOption: {
-    padding: 16,
-    borderWidth: 1,
-    borderColor: '#e0e0e0',
-    borderRadius: 8,
-    backgroundColor: 'white',
-  },
-  selectedPaymentOption: {
-    borderColor: '#333',
-    backgroundColor: '#f5f5f5',
-  },
-  paymentOptionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  paymentOptionText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#333',
-    flex: 1,
-  },
-  selectedPaymentOptionText: {
-    fontWeight: '600',
-  },
-  paymentOptionSubtext: {
-    fontSize: 14,
-    color: '#666',
-    marginLeft: 0,
-  },
   footer: {
     padding: 16,
-    backgroundColor: 'white',
     borderTopWidth: 1,
-    borderTopColor: '#e0e0e0',
+    borderTopColor: '#eee',
   },
   bookButton: {
     backgroundColor: '#333',
-    borderRadius: 8,
     padding: 16,
+    borderRadius: 8,
     alignItems: 'center',
   },
-  bookButtonLoading: {
-    backgroundColor: '#666',
-  },
-  bookButtonDisabled: {
-    backgroundColor: '#cccccc',
+  disabledButton: {
+    backgroundColor: '#ccc',
   },
   bookButtonText: {
-    color: 'white',
+    color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
@@ -902,6 +743,58 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.8)',
     fontSize: 14,
     marginTop: 4,
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 10,
+    padding: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    marginBottom: 16,
     textAlign: 'center',
+  },
+  bookingSummary: {
+    marginBottom: 20,
+  },
+  summaryText: {
+    fontSize: 16,
+    marginBottom: 8,
+    color: '#333',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
+  modalButton: {
+    flex: 1,
+    padding: 12,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#eee',
+    marginRight: 10,
+  },
+  confirmButton: {
+    backgroundColor: '#333',
+    marginLeft: 10,
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontWeight: '600',
+  },
+  confirmButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
 });

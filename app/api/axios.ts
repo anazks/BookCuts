@@ -9,7 +9,7 @@ const axiosInstance = axios.create({
   // https://bookmycuts.onrender.com
   // http://localhost:3002/api/
   // https://e4d54b45f914.ngrok-free.app 
-  baseURL: 'https://bookmycuts.onrender.com/api/', // ⬅️ Replace with your real API base URL
+  baseURL: ' https://8e2c93df1404.ngrok-free.app/api/', // ⬅️ Replace with your real API base URL
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',

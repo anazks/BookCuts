@@ -16,7 +16,7 @@ export const getShopById = async (shopId: string) => {
   try {
     let id =shopId
     let data = id
-    const response = await Axios.post('/shop/viewSigleShop/', {data});
+    const response = await Axios.post('/shop/viewSigleShop/', {id});
     return response.data;
   } catch (error: any) {
     throw error?.response?.data || { message: "Failed to fetch shop details" };
@@ -25,7 +25,7 @@ export const getShopById = async (shopId: string) => {
 
 export const getmyBarbers = async (shopId: string) => {
   try {
-    const response = await Axios.get(`/shop/viewMyBarbers/${shopId}`);
+    const response = await Axios.get(`/shop/viewSingleShopBarbers/${shopId}`);
     console.log("Response from getmyBarbers:", response);
     return response.data;
   } catch (error: any) {
@@ -34,7 +34,7 @@ export const getmyBarbers = async (shopId: string) => {
 }
 export const getShopServices = async (shopId: string) => {
   try {
-    const response = await Axios.get(`/shop/viewMyService/${shopId}`);
+    const response = await Axios.get(`/shop/viewSingleShopService/${shopId}`);
     console.log("Response from getShopServices:", response);
     return response.data;
   } catch (error: any) {
@@ -66,6 +66,7 @@ export const LoginShopUser = async (data: any) => {
 
 export const AddBarber = async (data: any) => {
   try {
+    console.log("Data being sent to AddBarber:", data);
     const response = await Axios.post('/shop/addBarber', data);
     console.log("Response from AddBarber:", response);
     return response.data;
@@ -102,12 +103,24 @@ export const viewMyService = async (shopId: string) => {
   }
 }
 
-export const addShop = async (data: any) => {
+export const addNewShop = async (data: any) => {
   try {
+
+    console.log("Data being sent to addShop:", data);
     const response = await Axios.post('/shop/addShop', data);
     console.log("Response from addShop:", response);
     return response.data;
   } catch (error: any) {
     throw error?.response?.data || { message: "Failed to add shop" };
+  }
+}
+
+export const viewMyShop = async () => {
+  try {
+    const response = await Axios.get('/shop/viewMyshop/');
+    console.log("Response from viewMyShop:", response);
+    return response.data;
+  } catch (error: any) {
+    throw error?.response?.data || { message: "Failed to fetch shop details" };
   }
 }

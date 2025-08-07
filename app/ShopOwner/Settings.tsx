@@ -1,11 +1,13 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import React, { useEffect, useState } from 'react'
 import { Alert, FlatList, Modal, ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native'
-import { AddBarber, AddService, viewMyBarbers, viewMyService } from '../api/Service/Shop'
+import { AddBarber, AddService, viewMyBarbers, viewMyService, viewMyShop } from '../api/Service/Shop'
 
 export default function Settings() {
   const [barbers, setBarbers] = useState([])
   const [services, setServices] = useState([])
+  const [shopData, setShopData] = useState(null)
   const [loading, setLoading] = useState(true)
 
   // Modal states
@@ -27,15 +29,36 @@ export default function Settings() {
   const fetchData = async () => {
     try {
       setLoading(true)
+      
+      // Fetch shop data first
+      console.log('Fetching shop data...')
+      const shopResponse = await viewMyShop()
+      console.log('Shop Response:', JSON.stringify(shopResponse, null, 2))
+      
+      if (shopResponse && shopResponse.data) {
+        setShopData(shopResponse.data)
+        console.log('Shop data set:', shopResponse.data)
+        
+        // Store shop ID globally in AsyncStorage
+        await AsyncStorage.setItem('shopId', shopResponse.data._id)
+        console.log('Shop ID stored:', shopResponse.data._id)
+      } else {
+        console.log('No shop data found in response')
+      }
+      
+      // Fetch other data
       const barbersData = await viewMyBarbers()
       const servicesData = await viewMyService()
-      console.log('Barbers:.....', barbersData)
-      console.log('Services:', servicesData)  
-      setBarbers(barbersData.data)
-      setServices(servicesData.data)
+      
+      console.log('Barbers:', barbersData)
+      console.log('Services:', servicesData)
+      
+      setBarbers(barbersData?.data || [])
+      setServices(servicesData?.data || [])
+      
     } catch (error) {
-      Alert.alert('Error', 'Failed to fetch data')
-      console.error(error)
+      Alert.alert('Error', 'Failed to fetch data: ' + error.message)
+      console.error('Fetch data error:', error)
     } finally {
       setLoading(false)
     }
@@ -48,9 +71,12 @@ export default function Settings() {
     }
 
     try {
+      const shopId = await AsyncStorage.getItem('shopId')
+      
       const newBarber = {
         BarberName: barberName.trim(),
-        From: from.trim()
+        From: from.trim(),
+        shopId: shopId // Include shop ID in the request
       }
 
       const addedBarber = await AddBarber(newBarber)
@@ -72,10 +98,13 @@ export default function Settings() {
     }
 
     try {
+      const shopId = await AsyncStorage.getItem('shopId')
+      
       const newService = {
         ServiceName: serviceName.trim(),
         Rate: servicePrice,
-        Duration: serviceDuration.trim()
+        Duration: serviceDuration.trim(),
+        shopId: shopId // Include shop ID in the request
       }
 
       const addedService = await AddService(newService)
@@ -115,8 +144,17 @@ export default function Settings() {
     }
   }
 
+  const editBarber = (id) => {
+    // Implement edit barber functionality
+    console.log('Edit barber:', id)
+  }
+
+  const editService = (id) => {
+    // Implement edit service functionality
+    console.log('Edit service:', id)
+  }
+
   const renderBarberItem = ({ item }) => (
-    console.log('Barber Item:', item),
     <View style={styles.listItem}>
       <View style={styles.itemInfo}>
         <Text style={styles.itemName}>{item.BarberName}</Text>
@@ -162,6 +200,45 @@ export default function Settings() {
     <View style={styles.container}>
       <ScrollView style={styles.scrollContainer}>
         <Text style={styles.header}>Salon Settings</Text>
+        
+        {/* Shop Info Section */}
+        {shopData && (
+          <View style={styles.section}>
+            <View style={styles.shopInfoHeader}>
+              <MaterialIcons name="store" size={24} color="#6c757d" />
+              <Text style={styles.sectionTitle}>Shop Information</Text>
+            </View>
+            
+            <View style={styles.shopInfoGrid}>
+              <View style={styles.shopInfoItem}>
+                <Text style={styles.shopInfoLabel}>Shop Name</Text>
+                <Text style={styles.shopInfoValue}>{shopData.ShopName}</Text>
+              </View>
+              
+              <View style={styles.shopInfoItem}>
+                <Text style={styles.shopInfoLabel}>City</Text>
+                <Text style={styles.shopInfoValue}>{shopData.City}</Text>
+              </View>
+              
+              <View style={styles.shopInfoItem}>
+                <Text style={styles.shopInfoLabel}>Mobile</Text>
+                <Text style={styles.shopInfoValue}>{shopData.Mobile}</Text>
+              </View>
+              
+              <View style={styles.shopInfoItem}>
+                <Text style={styles.shopInfoLabel}>Timing</Text>
+                <Text style={styles.shopInfoValue}>{shopData.Timing}</Text>
+              </View>
+              
+              {shopData.website && (
+                <View style={styles.shopInfoItem}>
+                  <Text style={styles.shopInfoLabel}>Website</Text>
+                  <Text style={styles.shopInfoValue}>{shopData.website}</Text>
+                </View>
+              )}
+            </View>
+          </View>
+        )}
         
         {/* Barbers Section */}
         <View style={styles.section}>
@@ -244,11 +321,11 @@ export default function Settings() {
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowBarberModal(false)}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.addButton]}
+                style={[styles.modalButton, styles.confirmButton]}
                 onPress={addBarber}
               >
                 <Text style={styles.buttonText}>Add</Text>
@@ -296,11 +373,11 @@ export default function Settings() {
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => setShowServiceModal(false)}
               >
-                <Text style={styles.buttonText}>Cancel</Text>
+                <Text style={styles.cancelButtonText}>Cancel</Text>
               </TouchableOpacity>
               
               <TouchableOpacity 
-                style={[styles.modalButton, styles.addButton]}
+                style={[styles.modalButton, styles.confirmButton]}
                 onPress={addService}
               >
                 <Text style={styles.buttonText}>Add</Text>
@@ -333,7 +410,7 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 24,
     backgroundColor: 'white',
     borderRadius: 12,
     padding: 16,
@@ -342,6 +419,30 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
+  },
+  shopInfoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  shopInfoGrid: {
+    gap: 12,
+  },
+  shopInfoItem: {
+    marginBottom: 8,
+  },
+  shopInfoLabel: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#666',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 2,
+  },
+  shopInfoValue: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
   },
   sectionHeader: {
     flexDirection: 'row',
@@ -353,6 +454,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '600',
     color: '#333',
+    marginLeft: 8,
   },
   addButton: {
     flexDirection: 'row',
@@ -443,8 +545,13 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: '#e9ecef',
   },
-  addButton: {
+  confirmButton: {
     backgroundColor: '#6c757d',
+  },
+  cancelButtonText: {
+    color: '#333',
+    fontWeight: '500',
+    fontSize: 16,
   },
   buttonText: {
     color: 'white',

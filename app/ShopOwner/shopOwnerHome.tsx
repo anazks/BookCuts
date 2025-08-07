@@ -1,4 +1,5 @@
 import { Ionicons, MaterialIcons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
   ActivityIndicator,
@@ -16,7 +17,7 @@ import Dashboard from '../Components/Shop/Dashboard';
 
 const { width } = Dimensions.get('window');
 
-export default function ShopOwnerHome({ navigation }) {
+export default function ShopOwnerHome() {
   const [profileData, setProfileData] = useState({
     firstName: '',
     mobileNo: '',
@@ -30,8 +31,9 @@ export default function ShopOwnerHome({ navigation }) {
       try {
         const response = await getMyProfile();
         console.log("Profile data fetched:", response);
-        if (response.success && response.user) {
-          setProfileData(response.user);
+        if (response.success && response.data) {
+
+          setProfileData(response.data);
         }
       } catch (error) {
         console.error("Error fetching profile:", error);
@@ -104,7 +106,7 @@ export default function ShopOwnerHome({ navigation }) {
           <View style={styles.modalContent}>
             <TouchableOpacity 
               style={styles.closeButton}
-              onPress={() => setShowAddShopModal(false)}
+              onPress={() => router.push('/Components/Shop/AddShop')}
             >
               <Ionicons name="close" size={24} color="#666" />
             </TouchableOpacity>

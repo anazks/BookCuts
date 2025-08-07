@@ -1,4 +1,5 @@
 import { Ionicons } from '@expo/vector-icons';
+import { router } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -40,6 +41,16 @@ const BookNow = ({ navigation }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+
+
+   const handleBooking = (shop) => {
+      console.log('Shop pressed:', shop);
+      router.push({
+        pathname: '/Screens/User/BookNow',
+        params: { shop_id: shop.id }
+      });
+    };
+  
   // Transform API data to match our component structure
   const transformShopData = (apiData) => {
     return apiData.map((shop, index) => {
@@ -59,7 +70,7 @@ const BookNow = ({ navigation }) => {
         mobile: mobile,
         timing: timing,
         website: website,
-        services: ['Wheel Alignment', 'Tire Balancing', 'Suspension Check', 'Brake Service'],
+        services: ['Haircut', 'Face wash'],
         price: '₹500-1500',
         distance: `${(Math.random() * 5 + 0.5).toFixed(1)} km`,
         image: `https://images.unsplash.com/photo-${1580618672591 + index}-eb180b1a973f?ixlib=rb-1.2.1&auto=format&fit=crop&w=500&q=60`,
@@ -207,7 +218,9 @@ const BookNow = ({ navigation }) => {
 
         <View style={styles.bottomRow}>
           <Text style={styles.priceText}>{item.price}</Text>
-          <TouchableOpacity style={styles.bookButton}>
+          <TouchableOpacity style={styles.bookButton} 
+            onPress={()=>handleBooking(item)}
+          >
             <Text style={styles.bookButtonText}>Book Service</Text>
             <Ionicons name="arrow-forward" size={16} color="#ffffff" />
           </TouchableOpacity>
