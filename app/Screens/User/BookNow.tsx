@@ -5,21 +5,23 @@ import Collapsible from 'react-native-collapsible';
 import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SlotBooking } from '../../api/Service/Booking';
 import { getmyBarbers, getShopById, getShopServices } from '../../api/Service/Shop';
+import RazorpayCheckout from 'react-native-razorpay';
+
 const parseTime = (timeStr: string): string => {
   timeStr = timeStr.trim().toLowerCase();
   const match = timeStr.match(/(\d+)([ap]m)/);
-  
+
   if (!match) return '09:00';
-  
+
   let hour = parseInt(match[1], 10);
   const modifier = match[2];
-  
+
   if (modifier === 'pm' && hour !== 12) {
     hour += 12;
   } else if (modifier === 'am' && hour === 12) {
     hour = 0;
   }
-  
+
   return `${hour.toString().padStart(2, '0')}:00`;
 };
 
@@ -42,41 +44,41 @@ export default function BookNow() {
       try {
         setLoading(true);
         setError(null);
-        
+
         const shopResponse = await getShopById(shop_id);
         console.log("Shop API Response:", shopResponse);
-        
+
         if (!shopResponse?.success || !shopResponse.data?.length) {
           throw new Error(shopResponse?.message || "Failed to load shop details");
         }
-        
+
         const shopData = shopResponse.data[0];
         const times = shopData.Timing?.split('-')?.map(t => t.trim()) || [];
         const openingTime = times.length > 0 ? parseTime(times[0]) : '09:00';
         const closingTime = times.length > 1 ? parseTime(times[1]) : '21:00';
-        
+
         const [servicesResponse, barbersResponse] = await Promise.all([
           getShopServices(shop_id),
           getmyBarbers(shop_id)
         ]);
-        
-        const services = servicesResponse?.success && servicesResponse.data 
+
+        const services = servicesResponse?.success && servicesResponse.data
           ? servicesResponse.data.map(service => ({
-              id: service._id,
-              name: service.ServiceName,
-              price: parseInt(service.Rate, 10) || 0,
-              duration: 30
-            }))
+            id: service._id,
+            name: service.ServiceName,
+            price: parseInt(service.Rate, 10) || 0,
+            duration: 30
+          }))
           : [];
-        
-        const barbers = barbersResponse?.success && barbersResponse.data 
+
+        const barbers = barbersResponse?.success && barbersResponse.data
           ? barbersResponse.data.map(barber => ({
-              id: barber._id,
-              name: barber.BarBarName,
-              nativePlace: barber.From
-            }))
+            id: barber._id,
+            name: barber.BarBarName,
+            nativePlace: barber.From
+          }))
           : [];
-        
+
         setShopDetails({
           id: shopData._id,
           name: shopData.ShopName,
@@ -87,7 +89,7 @@ export default function BookNow() {
           barbers,
           Timing: shopData.Timing
         });
-        
+
       } catch (error) {
         console.error("Error fetching shop data:", error);
         setError(error.message || "Failed to load shop details");
@@ -106,7 +108,7 @@ export default function BookNow() {
 
   const getTimeSlots = () => {
     if (!shopDetails) return [];
-    
+
     return [
       { id: 1, name: "Morning", start: shopDetails.openingTime, end: "12:00" },
       { id: 2, name: "Noon", start: "12:00", end: "15:00" },
@@ -170,7 +172,37 @@ export default function BookNow() {
     if (!selectedTimeSlot) return "Please select a time slot";
     return null;
   };
+  //old code
+  // const handleBookNow = async () => {
+  //   const validationError = validateBooking();
+  //   if (validationError) {
+  //     Alert.alert("Incomplete Booking", validationError);
+  //     return;
+  //   }
 
+  //   setIsBooking(true);
+
+  //   try {
+  //     const formData = prepareFormData();
+  //     console.log("Booking Form Data:", JSON.stringify(formData, null, 2));
+  //     let response = await SlotBooking(formData);
+  //     // await new Promise(resolve => setTimeout(resolve, 2000));
+
+  //     Alert.alert(
+  //       "Booking Confirmed", 
+  //       `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
+  //       [{ text: "OK", style: "default" }]
+  //     );
+
+  //   } catch (error) {
+  //     Alert.alert("Booking Failed", "Something went wrong. Please try again.");
+  //     console.error("Booking error:", error);
+  //   } finally {
+  //     setIsBooking(false);
+  //   }
+  // };
+
+  //new code
   const handleBookNow = async () => {
     const validationError = validateBooking();
     if (validationError) {
@@ -178,26 +210,56 @@ export default function BookNow() {
       return;
     }
 
-    setIsBooking(true);
-    
-    try {
-      const formData = prepareFormData();
-      console.log("Booking Form Data:", JSON.stringify(formData, null, 2));
-      let response = await SlotBooking(formData);
-      // await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      Alert.alert(
-        "Booking Confirmed", 
-        `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount to pay: ₹${formData.amountToPay}`,
-        [{ text: "OK", style: "default" }]
-      );
-      
-    } catch (error) {
-      Alert.alert("Booking Failed", "Something went wrong. Please try again.");
-      console.error("Booking error:", error);
-    } finally {
-      setIsBooking(false);
-    }
+    const formData = prepareFormData();
+
+    const amountInPaise = formData.amountToPay * 100;
+
+    const options = {
+      description: 'Booking at ' + formData.shopName,
+      // image: 'https://your-logo-url.png', // optional
+      currency: 'INR',
+      key: 'YOUR_RAZORPAY_KEY_ID', // replace with your Razorpay Key ID
+      amount: amountInPaise.toString(),
+      name: 'Book My Cuts',
+      prefill: {
+        email: 'test@example.com', // optional, get from user profile if available
+        contact: '9876543210',     // optional, get from user
+        name: 'Customer Name'      // optional, get from user
+      },
+      theme: { color: '#0ea5e9' }
+    };
+
+    RazorpayCheckout.open(options)
+      .then(async (paymentData) => {
+        // paymentData.razorpay_payment_id
+
+        try {
+          setIsBooking(true);
+
+          const finalFormData = {
+            ...formData,
+            razorpayPaymentId: paymentData.razorpay_payment_id,
+          };
+
+          const response = await SlotBooking(finalFormData);
+
+          Alert.alert(
+            "Booking Confirmed",
+            `Your appointment at ${shopDetails.name} is booked for ${selectedDate.toDateString()} during ${selectedTimeSlot.name}.\n\nAmount Paid: ₹${formData.amountToPay}`,
+            [{ text: "OK", style: "default" }]
+          );
+
+        } catch (error) {
+          Alert.alert("Booking Failed", "Something went wrong after payment.");
+          console.error("Booking error after payment:", error);
+        } finally {
+          setIsBooking(false);
+        }
+      })
+      .catch((error) => {
+        console.error("Payment failed:", error);
+        Alert.alert("Payment Failed", "Your payment was cancelled or failed.");
+      });
   };
 
   const getProgressSteps = () => {
@@ -221,8 +283,8 @@ export default function BookNow() {
     return (
       <View style={[styles.container, styles.errorContainer]}>
         <Text style={styles.errorText}>{error || "Failed to load shop details"}</Text>
-        <TouchableOpacity 
-          style={styles.retryButton} 
+        <TouchableOpacity
+          style={styles.retryButton}
           onPress={() => {
             setError(null);
             setLoading(true);
@@ -257,7 +319,7 @@ export default function BookNow() {
         <Text style={styles.shopHours}>
           Open: {shopDetails.Timing || `${shopDetails.openingTime} - ${shopDetails.closingTime}`}
         </Text>
-        
+
         <View style={styles.progressContainer}>
           <View style={styles.progressBar}>
             <View style={[styles.progressFill, { width: `${(progress.completed / progress.total) * 100}%` }]} />
@@ -296,7 +358,7 @@ export default function BookNow() {
 
         {/* Services Selection */}
         <View style={styles.card}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.cardTitleContainer}
             onPress={() => setServicesCollapsed(!servicesCollapsed)}>
             <Text style={styles.cardTitle}>Select Services</Text>
@@ -309,7 +371,7 @@ export default function BookNow() {
               </Text>
             </View>
           </TouchableOpacity>
-          
+
           <Collapsible collapsed={servicesCollapsed}>
             {shopDetails.services.length > 0 ? (
               <View style={styles.servicesGrid}>
@@ -354,8 +416,8 @@ export default function BookNow() {
             <Text style={styles.cardTitle}>Select Date & Time</Text>
             {selectedDate && selectedTimeSlot && <Text style={styles.checkmark}>✓</Text>}
           </View>
-          
-          <TouchableOpacity 
+
+          <TouchableOpacity
             style={[styles.dateButton, selectedDate && styles.dateButtonSelected]}
             onPress={showDatePicker}
             activeOpacity={0.7}>
@@ -397,7 +459,7 @@ export default function BookNow() {
         {/* Payment Options */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Payment Options</Text>
-          
+
           {totalPrice > 0 && (
             <View style={styles.pricingSummary}>
               <View style={styles.paymentRow}>
@@ -459,7 +521,7 @@ export default function BookNow() {
 
       {/* Fixed Book Now Button */}
       <View style={styles.footer}>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={[
             styles.bookButton,
             isBooking && styles.bookButtonLoading,
@@ -469,13 +531,13 @@ export default function BookNow() {
           disabled={isBooking || !selectedBarber || selectedServices.length === 0 || !selectedDate || !selectedTimeSlot}
           activeOpacity={0.8}>
           <Text style={styles.bookButtonText}>
-            {isBooking ? 'Processing...' : 
-             paymentType === 'advance' ? `Pay ₹${advanceAmount} & Book` : `Pay ₹${totalPrice} & Book`}
+            {isBooking ? 'Processing...' :
+              paymentType === 'advance' ? `Pay ₹${advanceAmount} & Book` : `Pay ₹${totalPrice} & Book`}
           </Text>
           {totalPrice > 0 && !isBooking && (
             <Text style={styles.bookButtonSubtext}>
-              {paymentType === 'advance' ? 
-                `Total: ₹${totalPrice} (₹${totalPrice - advanceAmount} remaining)` : 
+              {paymentType === 'advance' ?
+                `Total: ₹${totalPrice} (₹${totalPrice - advanceAmount} remaining)` :
                 `Total: ₹${totalPrice} • ${totalDuration} min`}
             </Text>
           )}

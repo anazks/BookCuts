@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Easing,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { myBookings } from '../../api/Service/Booking';
 
@@ -27,6 +27,7 @@ export default function Bookings() {
     try {
       setLoading(true);
       const response = await myBookings();
+      console.log(response, "booking")
       if (response.success) {
         setBookingsData(response);
       } else {
@@ -97,11 +98,11 @@ export default function Bookings() {
     });
 
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         style={[
-          styles.bookingCard, 
+          styles.bookingCard,
           isExpanded && styles.expandedCard
-        ]} 
+        ]}
         activeOpacity={0.9}
         onPress={() => toggleCard(booking._id)}
       >
@@ -445,7 +446,7 @@ export default function Bookings() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar backgroundColor="#2c3e50" barStyle="light-content" />
-      
+
       {/* Header */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Bookings</Text>
@@ -453,7 +454,7 @@ export default function Bookings() {
       </View>
 
       {/* Bookings List */}
-      <ScrollView 
+      <ScrollView
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}

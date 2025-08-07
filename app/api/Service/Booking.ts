@@ -13,7 +13,7 @@ export const SlotBooking = async (data: any) => {
 export const myBookings = async ()=>{
    try {
         const response = await Axios.post('/booking/myBookings');
-        console.log("Response from myBookings:", response);
+        console.log("Response from myBookings:---------", response);
         return response.data;
    } catch (error) {
       
