@@ -2,7 +2,6 @@ import { router, useLocalSearchParams } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import Collapsible from 'react-native-collapsible';
-import DateTimePickerModal from "react-native-modal-datetime-picker";
 import { SlotBooking } from '../../api/Service/Booking';
 import { getmyBarbers, getShopById, getShopServices } from '../../api/Service/Shop';
 
@@ -24,6 +23,166 @@ const parseTime = (timeStr) => {
   return `${hour.toString().padStart(2, '0')}:00`;
 };
 
+// Manual Calendar Component
+const ManualCalendar = ({ selectedDate, onDateSelect, isVisible, onClose }) => {
+  const [currentMonth, setCurrentMonth] = useState(new Date().getMonth());
+  const [currentYear, setCurrentYear] = useState(new Date().getFullYear());
+  
+  const months = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+  ];
+  
+  const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  
+  const getDaysInMonth = (month, year) => {
+    return new Date(year, month + 1, 0).getDate();
+  };
+  
+  const getFirstDayOfMonth = (month, year) => {
+    return new Date(year, month, 1).getDay();
+  };
+  
+  const generateCalendarDays = () => {
+    const daysInMonth = getDaysInMonth(currentMonth, currentYear);
+    const firstDay = getFirstDayOfMonth(currentMonth, currentYear);
+    const today = new Date();
+    const days = [];
+    
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDay; i++) {
+      days.push(null);
+    }
+    
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(currentYear, currentMonth, day);
+      const isToday = date.toDateString() === today.toDateString();
+      const isPast = date < today && !isToday;
+      const isSelected = selectedDate && date.toDateString() === selectedDate.toDateString();
+      
+      days.push({
+        day,
+        date,
+        isToday,
+        isPast,
+        isSelected
+      });
+    }
+    
+    return days;
+  };
+  
+  const navigateMonth = (direction) => {
+    if (direction === 'prev') {
+      if (currentMonth === 0) {
+        setCurrentMonth(11);
+        setCurrentYear(currentYear - 1);
+      } else {
+        setCurrentMonth(currentMonth - 1);
+      }
+    } else {
+      if (currentMonth === 11) {
+        setCurrentMonth(0);
+        setCurrentYear(currentYear + 1);
+      } else {
+        setCurrentMonth(currentMonth + 1);
+      }
+    }
+  };
+  
+  const handleDateSelect = (dayObj) => {
+    if (!dayObj || dayObj.isPast) return;
+    onDateSelect(dayObj.date);
+    onClose();
+  };
+  
+  const calendarDays = generateCalendarDays();
+  const today = new Date();
+  const canGoPrev = currentYear > today.getFullYear() || 
+    (currentYear === today.getFullYear() && currentMonth > today.getMonth());
+  
+  if (!isVisible) return null;
+  
+  return (
+    <Modal
+      visible={isVisible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={calendarStyles.modalOverlay}>
+        <View style={calendarStyles.calendarContainer}>
+          {/* Calendar Header */}
+          <View style={calendarStyles.calendarHeader}>
+            <TouchableOpacity 
+              style={[calendarStyles.navButton, !canGoPrev && calendarStyles.disabledNav]}
+              onPress={() => canGoPrev && navigateMonth('prev')}
+              disabled={!canGoPrev}
+            >
+              <Text style={calendarStyles.navText}>{'<'}</Text>
+            </TouchableOpacity>
+            
+            <Text style={calendarStyles.monthYear}>
+              {months[currentMonth]} {currentYear}
+            </Text>
+            
+            <TouchableOpacity 
+              style={calendarStyles.navButton}
+              onPress={() => navigateMonth('next')}
+            >
+              <Text style={calendarStyles.navText}>{'>'}</Text>
+            </TouchableOpacity>
+          </View>
+          
+          {/* Days of Week Header */}
+          <View style={calendarStyles.daysHeader}>
+            {daysOfWeek.map(day => (
+              <Text key={day} style={calendarStyles.dayHeaderText}>{day}</Text>
+            ))}
+          </View>
+          
+          {/* Calendar Grid */}
+          <View style={calendarStyles.calendarGrid}>
+            {calendarDays.map((dayObj, index) => (
+              <TouchableOpacity
+                key={index}
+                style={[
+                  calendarStyles.dayCell,
+                  dayObj?.isToday && calendarStyles.todayCell,
+                  dayObj?.isPast && calendarStyles.pastCell,
+                  dayObj?.isSelected && calendarStyles.selectedCell,
+                ]}
+                onPress={() => handleDateSelect(dayObj)}
+                disabled={!dayObj || dayObj.isPast}
+              >
+                <Text style={[
+                  calendarStyles.dayText,
+                  dayObj?.isToday && calendarStyles.todayText,
+                  dayObj?.isPast && calendarStyles.pastText,
+                  dayObj?.isSelected && calendarStyles.selectedText,
+                ]}>
+                  {dayObj?.day || ''}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+          
+          {/* Calendar Footer */}
+          <View style={calendarStyles.calendarFooter}>
+            <TouchableOpacity 
+              style={calendarStyles.closeButton}
+              onPress={onClose}
+            >
+              <Text style={calendarStyles.closeButtonText}>Close</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+};
+
 export default function BookNow() {
   const { shop_id } = useLocalSearchParams();
   const [shopDetails, setShopDetails] = useState(null);
@@ -32,7 +191,7 @@ export default function BookNow() {
   const [selectedServices, setSelectedServices] = useState([]);
   const [selectedDate, setSelectedDate] = useState(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState(null);
-  const [isDatePickerVisible, setDatePickerVisibility] = useState(false);
+  const [isCalendarVisible, setCalendarVisibility] = useState(false);
   const [servicesCollapsed, setServicesCollapsed] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
   const [error, setError] = useState(null);
@@ -109,8 +268,9 @@ export default function BookNow() {
       }
     };
 
-    if (shop_id) fetchShopData();
-    else {
+    if (shop_id) {
+      fetchShopData();
+    } else {
       setError('No shop ID provided');
       setLoading(false);
     }
@@ -192,50 +352,65 @@ export default function BookNow() {
     setShowConfirmation(true);
   };
 
-  const confirmBooking = async () => {
-    setShowConfirmation(false);
-    setIsBooking(true);
+ const confirmBooking = async () => {
+  setShowConfirmation(false);
+  setIsBooking(true);
+  
+  try {
+    const bookingData = prepareBookingData();
+    console.log('Submitting booking:', bookingData);
     
-    try {
-      const bookingData = prepareBookingData();
-      console.log('Submitting booking:', bookingData);
-      
-      const response = await SlotBooking(bookingData);
-      
-      if (response.success) {
-        router.push({
-          pathname: '/Screens/User/PayNow',
-          params: {
-            bookingData: JSON.stringify(bookingData),
-            advanceAmount: Math.min(20, totalPrice),
-            totalPrice,
-            barberName: selectedBarber?.name,
-            bookingDate: selectedDate?.toDateString(),
-            timeSlot: selectedTimeSlot?.name
-          }
-        });
-        Alert.alert(
-          "Booking Confirmed", 
-          `Your appointment with ${selectedBarber.name} is confirmed for ${selectedDate.toDateString()}`,
-          [{ text: "OK" }]
-        );
-        // Reset form
-        setSelectedBarber(null);
-        setSelectedServices([]);
-        setSelectedDate(null);
-        setSelectedTimeSlot(null);
-      } else {
-        throw new Error(response.message || "Booking failed");
-      }
-    } catch (error) {
-      console.error('Booking error:', error);
+    const response = await SlotBooking(bookingData);
+    console.log("..........................",response,"-------------------------------------------------------------------------------------------------------")
+    if (response.success) {
+      // Get the booking ID from the response
+      const bookingId = response.BookingStatus?._id 
+      console.log(bookingId,"<><><><><><><><><><><><><><><><><><><><>")
       Alert.alert(
-        "Booking Error", 
-        error.message || "Failed to complete booking. Please try again."
+        "Booking Confirmed", 
+        `Your appointment with ${selectedBarber.name} is confirmed for ${selectedDate.toDateString()}`,
+        [{ 
+          text: "Continue to Payment", 
+          onPress: () => {
+            router.push({
+              pathname: '/Screens/User/PayNow',
+              params: {
+                bookingData: JSON.stringify(bookingData),
+                bookingId: bookingId, // Add the booking ID here
+                advanceAmount: Math.min(20, totalPrice),
+                totalPrice,
+                barberName: selectedBarber?.name,
+                bookingDate: selectedDate?.toDateString(),
+                timeSlot: selectedTimeSlot?.name
+              }
+            });
+          }
+        }]
       );
-    } finally {
-      setIsBooking(false);
+      
+      // Reset form
+      setSelectedBarber(null);
+      setSelectedServices([]);
+      setSelectedDate(null);
+      setSelectedTimeSlot(null);
+    } else {
+      throw new Error(response.message || "Booking failed");
     }
+  } catch (error) {
+    console.error('Booking error:', error);
+    Alert.alert(
+      "Booking Error", 
+      error.message || "Failed to complete booking. Please try again."
+    );
+  } finally {
+    setIsBooking(false);
+  }
+};
+
+  const handleRetry = () => {
+    setError(null);
+    setLoading(true);
+    // The useEffect will automatically refetch when loading changes
   };
 
   const getProgressSteps = () => {
@@ -259,7 +434,7 @@ export default function BookNow() {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorText}>{error || "Failed to load shop details"}</Text>
-        <TouchableOpacity style={styles.retryButton} onPress={() => window.location.reload()}>
+        <TouchableOpacity style={styles.retryButton} onPress={handleRetry}>
           <Text style={styles.retryButtonText}>Retry</Text>
         </TouchableOpacity>
       </View>
@@ -271,6 +446,14 @@ export default function BookNow() {
 
   return (
     <View style={styles.container}>
+      {/* Manual Calendar */}
+      <ManualCalendar
+        selectedDate={selectedDate}
+        onDateSelect={setSelectedDate}
+        isVisible={isCalendarVisible}
+        onClose={() => setCalendarVisibility(false)}
+      />
+
       {/* Confirmation Modal */}
       <Modal
         visible={showConfirmation}
@@ -421,23 +604,12 @@ export default function BookNow() {
 
           <TouchableOpacity
             style={[styles.dateButton, selectedDate && styles.selectedButton]}
-            onPress={() => setDatePickerVisibility(true)}
+            onPress={() => setCalendarVisibility(true)}
           >
             <Text style={selectedDate ? styles.dateText : styles.placeholderText}>
               {selectedDate ? selectedDate.toDateString() : "Select date"}
             </Text>
           </TouchableOpacity>
-
-          <DateTimePickerModal
-            isVisible={isDatePickerVisible}
-            mode="date"
-            onConfirm={date => {
-              setSelectedDate(date);
-              setDatePickerVisibility(false);
-            }}
-            onCancel={() => setDatePickerVisibility(false)}
-            minimumDate={new Date()}
-          />
 
           {selectedDate && (
             <>
@@ -796,5 +968,126 @@ const styles = StyleSheet.create({
   confirmButtonText: {
     color: '#fff',
     fontWeight: '600',
+  },
+});
+
+// Calendar Styles
+const calendarStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  calendarContainer: {
+    width: '90%',
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 20,
+    maxHeight: '80%',
+  },
+  calendarHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 15,
+    borderBottomWidth: 1,
+    borderBottomColor: '#eee',
+  },
+  navButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#f5f5f5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  disabledNav: {
+    backgroundColor: '#f0f0f0',
+    opacity: 0.5,
+  },
+  navText: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  monthYear: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  daysHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 10,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#f0f0f0',
+  },
+  dayHeaderText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#666',
+    width: 40,
+    textAlign: 'center',
+  },
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-around',
+    marginBottom: 20,
+  },
+  dayCell: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginVertical: 2,
+    borderRadius: 20,
+  },
+  todayCell: {
+    backgroundColor: '#e3f2fd',
+    borderWidth: 1,
+    borderColor: '#2196f3',
+  },
+  selectedCell: {
+    backgroundColor: '#333',
+  },
+  pastCell: {
+    opacity: 0.3,
+  },
+  dayText: {
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '500',
+  },
+  todayText: {
+    color: '#2196f3',
+    fontWeight: 'bold',
+  },
+  selectedText: {
+    color: '#fff',
+    fontWeight: 'bold',
+  },
+  pastText: {
+    color: '#ccc',
+  },
+  calendarFooter: {
+    borderTopWidth: 1,
+    borderTopColor: '#eee',
+    paddingTop: 15,
+    alignItems: 'center',
+  },
+  closeButton: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 8,
+  },
+  closeButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
   },
 });

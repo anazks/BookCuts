@@ -42,6 +42,17 @@ export const getShopServices = async (shopId: string) => {
   }
 }
 
+export const getShopBookings = async ()=>{
+  try {
+    let response = await Axios('/shop/viewMyBooking')
+    console.log(response)
+    console.log(response)
+    return response.data
+  } catch (error) {
+    console.log(error)
+    return null
+  }
+}
 // --------------------------------for Shop Side------------------------------------------------------------
 export const RegisterShopUser = async (data: any) => {
   try {

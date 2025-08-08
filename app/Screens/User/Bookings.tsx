@@ -1,14 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Animated,
-    Easing,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    Text,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Animated,
+  Easing,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  Text,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { myBookings } from '../../api/Service/Booking';
 
@@ -110,6 +110,9 @@ export default function Bookings() {
           <View style={styles.headerLeft}>
             <Text style={styles.barberName}>{booking.barberName}</Text>
             <Text style={styles.nativePlace}>{booking.barberNativePlace}</Text>
+            {booking.shopDetails && (
+              <Text style={styles.shopName}>{booking.shopDetails.ShopName}</Text>
+            )}
           </View>
           <View style={styles.headerRight}>
             <View style={[styles.statusBadge, { backgroundColor: getStatusColor(booking.bookingStatus) }]}>
@@ -142,18 +145,60 @@ export default function Bookings() {
         {/* Expanded Content */}
         {isExpanded && (
           <View style={styles.expandedContent}>
+            {/* Time Slot Details */}
+            <View style={styles.section}>
+              <Text style={styles.sectionTitle}>Time Slot</Text>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Slot Name:</Text>
+                <Text style={styles.detailValue}>{booking.timeSlotName}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Duration:</Text>
+                <Text style={styles.detailValue}>{booking.totalDuration} minutes</Text>
+              </View>
+            </View>
+
             {/* Services */}
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>Services</Text>
-              {booking.services.map((service) => (
-                <View key={service.id} style={styles.serviceItem}>
-                  <Text style={styles.serviceName}>{service.name}</Text>
-                  <Text style={styles.serviceDetails}>
-                    ₹{service.price} • {service.duration} min
-                  </Text>
-                </View>
-              ))}
+              {booking.services && booking.services.length > 0 ? (
+                booking.services.map((service, index) => (
+                  <View key={service._id || index} style={styles.serviceItem}>
+                    <Text style={styles.serviceName}>{service.name}</Text>
+                    <Text style={styles.serviceDetails}>
+                      ₹{service.price} • {service.duration} min
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noServicesText}>No services listed</Text>
+              )}
             </View>
+
+            {/* Shop Details */}
+            {booking.shopDetails && (
+              <View style={styles.section}>
+                <Text style={styles.sectionTitle}>Shop Details</Text>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Shop:</Text>
+                  <Text style={styles.detailValue}>{booking.shopDetails.ShopName}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>City:</Text>
+                  <Text style={styles.detailValue}>{booking.shopDetails.City}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Timing:</Text>
+                  <Text style={styles.detailValue}>{booking.shopDetails.Timing}</Text>
+                </View>
+                {booking.shopDetails.Mobile && (
+                  <View style={styles.detailRow}>
+                    <Text style={styles.detailLabel}>Contact:</Text>
+                    <Text style={styles.detailValue}>{booking.shopDetails.Mobile}</Text>
+                  </View>
+                )}
+              </View>
+            )}
 
             {/* Payment Details */}
             <View style={styles.section}>
@@ -161,6 +206,10 @@ export default function Bookings() {
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Payment Type:</Text>
                 <Text style={styles.detailValue}>{booking.paymentType}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Amount to Pay:</Text>
+                <Text style={[styles.detailValue, styles.paidAmount]}>₹{booking.amountToPay}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Amount Paid:</Text>
@@ -178,6 +227,12 @@ export default function Bookings() {
                   <Text style={styles.paymentStatusText}>{booking.paymentStatus.toUpperCase()}</Text>
                 </View>
               </View>
+              {booking.paymentId && (
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Payment ID:</Text>
+                  <Text style={styles.detailValue}>{booking.paymentId}</Text>
+                </View>
+              )}
             </View>
 
             {/* Additional Info */}
@@ -185,11 +240,15 @@ export default function Bookings() {
               <Text style={styles.sectionTitle}>Additional Info</Text>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Booking ID:</Text>
-                <Text style={styles.detailValue}>{booking._id.slice(-8)}</Text>
+                <Text style={styles.detailValue}>{booking._id.toString().slice(-8)}</Text>
               </View>
               <View style={styles.detailRow}>
                 <Text style={styles.detailLabel}>Booked On:</Text>
                 <Text style={styles.detailValue}>{formatDate(booking.bookingTimestamp)}</Text>
+              </View>
+              <View style={styles.detailRow}>
+                <Text style={styles.detailLabel}>Currency:</Text>
+                <Text style={styles.detailValue}>{booking.currency}</Text>
               </View>
             </View>
           </View>
@@ -261,6 +320,12 @@ export default function Bookings() {
       color: '#7f8c8d',
       marginTop: 2,
     },
+    shopName: {
+      fontSize: 12,
+      color: '#3498db',
+      marginTop: 2,
+      fontStyle: 'italic',
+    },
     headerRight: {
       flexDirection: 'row',
       alignItems: 'center',
@@ -331,6 +396,11 @@ export default function Bookings() {
     serviceDetails: {
       fontSize: 13,
       color: '#7f8c8d',
+    },
+    noServicesText: {
+      fontSize: 13,
+      color: '#7f8c8d',
+      fontStyle: 'italic',
     },
     detailRow: {
       flexDirection: 'row',

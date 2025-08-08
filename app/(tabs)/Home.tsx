@@ -6,6 +6,7 @@ import {
   Alert,
   FlatList,
   Image,
+  Modal,
   ScrollView,
   StatusBar,
   StyleSheet,
@@ -16,11 +17,38 @@ import {
 import { getAllShops } from '../api/Service/Shop';
 import { getmyProfile } from '../api/Service/User';
 
-const Home = () => {
+const Home = ({ navigation }) => {
   const [shops, setShops] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [userProfile, setUserProfile] = useState(null);
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
+  const [selectedCity, setSelectedCity] = useState('India');
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
+
+  // List of cities for dropdown
+  const cities = [
+    'All Cities',
+    'Kochi',
+    'Salem',
+    'Mumbai',
+    'Delhi',
+    'Bangalore',
+    'Chennai',
+    'Hyderabad',
+    'Pune',
+    'Kolkata',
+    'Ahmedabad',
+    'Jaipur',
+    'Lucknow',
+    'Kanpur',
+    'Nagpur',
+    'Indore',
+    'Thane',
+    'Bhopal',
+    'Visakhapatnam',
+    'Pimpri-Chinchwad'
+  ];
 
   // API call to fetch all shops
   const getShops = async () => {
@@ -53,16 +81,67 @@ const Home = () => {
       console.log("User Profile Response:", response);
       if (response && response.success) {
         setUserProfile(response.user);
+        // Set selected city from user profile
+        if (response.user && response.user.city) {
+          setSelectedCity(response.user.city);
+        }
       }
     } catch (error) {
       console.error("Error fetching profile:", error);
     }
   };
 
+  // Handle logout
+  const handleLogout = () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        {
+          text: "Cancel",
+          style: "cancel"
+        },
+        {
+          text: "Logout",
+          style: "destructive",
+          onPress: () => {
+            // Clear any stored authentication data here
+            // For example: AsyncStorage.removeItem('userToken');
+            
+            // Navigate to login screen
+            router.replace('/Screens/Auth/Login'); // Adjust path as needed
+          }
+        }
+      ]
+    );
+  };
+
+  // Handle city selection
+  const handleCitySelect = (city) => {
+    setSelectedCity(city);
+    setShowCityDropdown(false);
+    
+    // You can add logic here to filter shops by city
+    // or make a new API call with city filter
+    console.log('Selected city:', city);
+  };
+
   useEffect(() => {
     getShops();
     getProfile();
   }, []);
+
+  // Filter shops by selected city
+  const getFilteredShops = () => {
+    if (selectedCity === 'All Cities' || selectedCity === 'India') {
+      return shops;
+    }
+    
+    return shops.filter(shop => 
+      shop.City?.toLowerCase().includes(selectedCity.toLowerCase()) ||
+      shop.city?.toLowerCase().includes(selectedCity.toLowerCase())
+    );
+  };
 
   // Enhanced transform function to handle all shop data structures
   const transformShopData = (apiShops) => {
@@ -100,13 +179,15 @@ const Home = () => {
 
   // Get popular shops (first 8 shops to show more)
   const getPopularShops = () => {
-    const transformedShops = transformShopData(shops);
+    const filteredShops = getFilteredShops();
+    const transformedShops = transformShopData(filteredShops);
     return transformedShops.slice(0, 8);
   };
 
   // Get top rated shops (show more variety)
   const getTopRatedShops = () => {
-    const transformedShops = transformShopData(shops);
+    const filteredShops = getFilteredShops();
+    const transformedShops = transformShopData(filteredShops);
     
     // First, get shops from preferred cities
     const preferredCityShops = transformedShops.filter(shop => 
@@ -129,7 +210,8 @@ const Home = () => {
 
   // Get all shops for a comprehensive view
   const getAllTransformedShops = () => {
-    return transformShopData(shops);
+    const filteredShops = getFilteredShops();
+    return transformShopData(filteredShops);
   };
 
   // Sample trending designs data
@@ -175,6 +257,29 @@ const Home = () => {
     getShops();
   };
 
+  // Handle search press
+  const handleSearchPress = () => {
+    router.push('/Screens/User/Search');
+  };
+
+  // Handle profile press
+  const handleProfilePress = () => {
+    router.push('/Screens/User/Profile');
+  };
+
+  // Handle notifications press
+  const handleNotificationsPress = () => {
+    router.push('/Screens/User/Notifications');
+  };
+
+  // Handle see all press
+  const handleSeeAllPress = (section) => {
+    router.push({
+      pathname: '/Screens/User/AllShops',
+      params: { section, city: selectedCity }
+    });
+  };
+
   if (loading) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -195,14 +300,20 @@ const Home = () => {
       <View style={styles.navContainer}>
         <View style={styles.navContent}>
           <View style={styles.headerLeft}>
-            <TouchableOpacity style={styles.menuButton}>
+            <TouchableOpacity 
+              style={styles.menuButton}
+              onPress={() => setShowLogoutModal(true)}
+            >
               <Ionicons name="menu" size={24} color="#333" />
             </TouchableOpacity>
-            <View style={styles.locationContainer}>
+            <TouchableOpacity 
+              style={styles.locationContainer}
+              onPress={() => setShowCityDropdown(true)}
+            >
               <Ionicons name="location-outline" size={16} color="#666" />
-              <Text style={styles.locationText}>{userProfile ? userProfile.city : 'india'}</Text>
+              <Text style={styles.locationText}>{selectedCity}</Text>
               <Ionicons name="chevron-down" size={16} color="#666" />
-            </View>
+            </TouchableOpacity>
           </View>
           
           <View style={styles.headerRight}>
@@ -212,22 +323,122 @@ const Home = () => {
             >
               <Ionicons name="refresh-outline" size={24} color="#333" />
             </TouchableOpacity>
-            <TouchableOpacity style={styles.notificationButton}>
+            <TouchableOpacity 
+              style={styles.notificationButton}
+              onPress={handleNotificationsPress}
+            >
               <Ionicons name="notifications-outline" size={24} color="#333" />
               <View style={styles.notificationDot} />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.profileButton}
-              onPress={() => navigation?.navigate('Profile')}
+              onPress={handleProfilePress}
             >
               <Image 
-                source={{ uri: 'https://randomuser.me/api/portraits/men/1.jpg' }} 
+                source={{ 
+                  uri: userProfile?.profileImage || 'https://randomuser.me/api/portraits/men/1.jpg' 
+                }} 
                 style={styles.profileImage}
               />
             </TouchableOpacity>
           </View>
         </View>
       </View>
+
+      {/* City Dropdown Modal */}
+      <Modal
+        visible={showCityDropdown}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowCityDropdown(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowCityDropdown(false)}
+        >
+          <View style={styles.cityDropdownContainer}>
+            <View style={styles.cityDropdownHeader}>
+              <Text style={styles.cityDropdownTitle}>Select City</Text>
+              <TouchableOpacity 
+                onPress={() => setShowCityDropdown(false)}
+                style={styles.closeButton}
+              >
+                <Ionicons name="close" size={24} color="#333" />
+              </TouchableOpacity>
+            </View>
+            <ScrollView style={styles.cityList} showsVerticalScrollIndicator={false}>
+              {cities.map((city, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.cityItem,
+                    selectedCity === city && styles.selectedCityItem
+                  ]}
+                  onPress={() => handleCitySelect(city)}
+                >
+                  <Ionicons 
+                    name="location-outline" 
+                    size={20} 
+                    color={selectedCity === city ? "#FF6B6B" : "#666"} 
+                  />
+                  <Text 
+                    style={[
+                      styles.cityItemText,
+                      selectedCity === city && styles.selectedCityItemText
+                    ]}
+                  >
+                    {city}
+                  </Text>
+                  {selectedCity === city && (
+                    <Ionicons name="checkmark" size={20} color="#FF6B6B" />
+                  )}
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Logout Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowLogoutModal(false)}
+      >
+        <TouchableOpacity 
+          style={styles.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setShowLogoutModal(false)}
+        >
+          <View style={styles.logoutModalContainer}>
+            <View style={styles.logoutModalContent}>
+              <View style={styles.logoutIcon}>
+                <Ionicons name="log-out-outline" size={48} color="#FF6B6B" />
+              </View>
+              <Text style={styles.logoutTitle}>Logout</Text>
+              <Text style={styles.logoutMessage}>
+                Are you sure you want to logout from your account?
+              </Text>
+              <View style={styles.logoutButtonContainer}>
+                <TouchableOpacity 
+                  style={styles.cancelButton}
+                  onPress={() => setShowLogoutModal(false)}
+                >
+                  <Text style={styles.cancelButtonText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                  style={styles.logoutButton}
+                  onPress={handleLogout}
+                >
+                  <Text style={styles.logoutButtonText}>Logout</Text>
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         {/* Welcome Section with Dynamic Name */}
@@ -236,15 +447,17 @@ const Home = () => {
             Hello, {userProfile ? userProfile.firstName : 'there'}! 👋
           </Text>
           <Text style={styles.welcomeSubtitle}>Find the perfect salon for your style</Text>
-          {shops.length > 0 && (
-            <Text style={styles.shopsCount}>{shops.length} shops available</Text>
+          {getFilteredShops().length > 0 && (
+            <Text style={styles.shopsCount}>
+              {getFilteredShops().length} shops available in {selectedCity}
+            </Text>
           )}
         </View>
 
         {/* Search Bar */}
         <TouchableOpacity 
           style={styles.searchContainer}
-          onPress={() => navigation?.navigate('Search')}
+          onPress={handleSearchPress}
         >
           <View style={styles.searchContent}>
             <Ionicons name="search" size={20} color="#666" />
@@ -266,12 +479,32 @@ const Home = () => {
           </View>
         )}
 
+        {/* Quick Services */}
+        <View style={styles.section}>
+          <View style={styles.sectionHeader}>
+            <Text style={styles.sectionTitle}>Quick Services</Text>
+          </View>
+          <View style={styles.quickServicesContainer}>
+            {quickServices.map((service) => (
+              <TouchableOpacity key={service.id} style={styles.serviceCard}>
+                <View style={[styles.serviceIcon, { backgroundColor: service.color }]}>
+                  <Ionicons name={service.icon} size={24} color="#FFF" />
+                </View>
+                <Text style={styles.serviceName}>{service.name}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         {/* Popular Shops Section */}
-        {shops.length > 0 && (
+        {getFilteredShops().length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Popular Near You</Text>
-              <TouchableOpacity style={styles.seeAllButton}>
+              <TouchableOpacity 
+                style={styles.seeAllButton}
+                onPress={() => handleSeeAllPress('popular')}
+              >
                 <Text style={styles.seeAllText}>See All</Text>
                 <Ionicons name="chevron-forward" size={16} color="#FF6B6B" />
               </TouchableOpacity>
@@ -316,11 +549,14 @@ const Home = () => {
         )}
 
         {/* Top Rated Section */}
-        {shops.length > 0 && (
+        {getFilteredShops().length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>Top Rated This Week</Text>
-              <TouchableOpacity style={styles.seeAllButton}>
+              <TouchableOpacity 
+                style={styles.seeAllButton}
+                onPress={() => handleSeeAllPress('top-rated')}
+              >
                 <Text style={styles.seeAllText}>See All</Text>
                 <Ionicons name="chevron-forward" size={16} color="#FF6B6B" />
               </TouchableOpacity>
@@ -367,12 +603,12 @@ const Home = () => {
           </View>
         )}
 
-        {/* All Shops Section - NEW ADDITION */}
-        {shops.length > 0 && (
+        {/* All Shops Section */}
+        {getFilteredShops().length > 0 && (
           <View style={styles.section}>
             <View style={styles.sectionHeader}>
               <Text style={styles.sectionTitle}>All Available Shops</Text>
-              <Text style={styles.shopsCountSmall}>({shops.length} shops)</Text>
+              <Text style={styles.shopsCountSmall}>({getFilteredShops().length} shops)</Text>
             </View>
             <FlatList
               horizontal
@@ -417,7 +653,10 @@ const Home = () => {
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Trending Styles</Text>
-            <TouchableOpacity style={styles.seeAllButton}>
+            <TouchableOpacity 
+              style={styles.seeAllButton}
+              onPress={() => router.push('/Screens/User/TrendingStyles')}
+            >
               <Text style={styles.seeAllText}>See All</Text>
               <Ionicons name="chevron-forward" size={16} color="#FF6B6B" />
             </TouchableOpacity>
@@ -459,7 +698,10 @@ const Home = () => {
                 <Text style={styles.offerCode}>Use code: FIRST20</Text>
               </View>
             </View>
-            <TouchableOpacity style={styles.bookNowButton} onPress={() => router.push('/Screens/User/BookNow')}>
+            <TouchableOpacity 
+              style={styles.bookNowButton} 
+              onPress={() => router.push('/Screens/User/BookNow')}
+            >
               <Text style={styles.bookNowText}>Book Now</Text>
               <Ionicons name="arrow-forward" size={16} color="#FFF" />
             </TouchableOpacity>
@@ -521,6 +763,10 @@ const styles = StyleSheet.create({
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: '#F8F8F8',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
   locationText: {
     fontSize: 14,
@@ -557,6 +803,132 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     borderWidth: 2,
     borderColor: '#FF6B6B',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cityDropdownContainer: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    marginHorizontal: 20,
+    maxHeight: '70%',
+    width: '90%',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  cityDropdownHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E8E8E8',
+  },
+  cityDropdownTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1A1A1A',
+  },
+  closeButton: {
+    padding: 4,
+  },
+  cityList: {
+    maxHeight: 400,
+  },
+  cityItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
+  },
+  selectedCityItem: {
+    backgroundColor: '#FFF5F5',
+  },
+  cityItemText: {
+    flex: 1,
+    marginLeft: 12,
+    fontSize: 16,
+    color: '#333',
+    fontWeight: '400',
+  },
+  selectedCityItemText: {
+    color: '#FF6B6B',
+    fontWeight: '600',
+  },
+  logoutModalContainer: {
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  logoutModalContent: {
+    backgroundColor: '#FFF',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    marginHorizontal: 40,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  logoutIcon: {
+    marginBottom: 20,
+  },
+  logoutTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 12,
+  },
+  logoutMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 30,
+    lineHeight: 22,
+  },
+  logoutButtonContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    width: '100%',
+  },
+  cancelButton: {
+    flex: 1,
+    backgroundColor: '#F8F8F8',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginRight: 8,
+    alignItems: 'center',
+  },
+  cancelButtonText: {
+    color: '#666',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  logoutButton: {
+    flex: 1,
+    backgroundColor: '#FF6B6B',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 12,
+    marginLeft: 8,
+    alignItems: 'center',
+  },
+  logoutButtonText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
   scrollContainer: {
     flex: 1,
@@ -669,6 +1041,30 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginRight: 4,
+  },
+  quickServicesContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+  },
+  serviceCard: {
+    alignItems: 'center',
+    flex: 1,
+    marginHorizontal: 4,
+  },
+  serviceIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  serviceName: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#333',
+    textAlign: 'center',
   },
   horizontalListContainer: {
     paddingLeft: 20,

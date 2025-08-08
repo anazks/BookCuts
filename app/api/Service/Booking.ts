@@ -30,3 +30,15 @@ export const createOrder = async (data:any)=>{
         return null
     }
 }
+
+export const verifyPayment = async(data:any)=>{
+    try {
+        // console.log("----------------------------------",data)
+        const response = await Axios.post('/booking/verifyPayment',data)
+        console.log(response)
+        return response.data
+    } catch (error) {
+        console.log(error)
+        return null   
+    }
+}

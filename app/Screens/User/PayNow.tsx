@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import RazorpayCheckout from 'react-native-razorpay';
-import { createOrder } from '../../api/Service/Booking';
+import { createOrder, verifyPayment } from '../../api/Service/Booking';
 
 const DetailRow = ({ label, value }) => (
   <View style={styles.detailRow}>
@@ -36,9 +36,12 @@ export default function PayNow() {
   const [paymentType, setPaymentType] = useState('full');
   const [isLoading, setIsLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState(null);
 
+  // Extract all parameters including bookingId
   const { 
     bookingData: bookingDataString,
+    bookingId, // This is the booking ID passed from previous screen
     barberName,
     bookingDate,
     timeSlot,
@@ -52,8 +55,10 @@ export default function PayNow() {
   useEffect(() => {
     const loadBookingData = async () => {
       try {
-        if (bookingDataString && !bookingData) {
+        if (bookingDataString) {
           const parsedData = JSON.parse(bookingDataString);
+          console.log("Parsed booking data:", parsedData);
+          console.log("................................",bookingId,"-------------------------------------------------------------------------")
           setBookingData(parsedData);
         }
       } catch (error) {
@@ -68,17 +73,85 @@ export default function PayNow() {
     loadBookingData();
   }, [bookingDataString]);
 
-  const handlePaymentSuccess = useCallback((paymentId) => {
-    router.push({
-      pathname: '/booking/confirmation',
-      params: {
-        bookingId: bookingData?.id,
-        paymentId,
-        paymentType,
-        amount: paymentType === 'advance' ? advanceAmount : totalPrice
+  // Get the final booking ID (either from params or parsed data)
+  const getBookingId = () => {
+    console.log(">>>>>>>>>>>>>>>>>>>>>>>>>>>>",bookingId,">>>>>>>>>>>>>>>>>>>>>>>>>>>>",bookingData._id,"---bookingDatabookingData;-------")
+    if (bookingId) return bookingId;
+    if (bookingData?._id) return bookingData._id;
+    return null;
+  };
+
+  const handlePaymentSuccess = useCallback(async (paymentResponse) => {
+    try {
+      setIsProcessing(true);
+      
+      const {
+        razorpay_payment_id,
+        razorpay_order_id,
+        razorpay_signature
+      } = paymentResponse;
+
+      console.log('Payment successful, verifying with backend...', {
+        paymentId: razorpay_payment_id,
+        orderId: razorpay_order_id,
+        signature: razorpay_signature
+      });
+
+      // Get the booking ID to use for verification
+      const finalBookingId = getBookingId();
+      if (!finalBookingId) {
+        throw new Error('Booking ID not found for verification');
       }
-    });
-  }, [bookingData, paymentType, advanceAmount, totalPrice]);
+
+      // Prepare verification data with booking ID
+      const verificationData = {
+        razorpay_payment_id,
+        razorpay_order_id,
+        razorpay_signature,
+        bookingId: finalBookingId,
+        paymentType,
+        amount: paymentType === 'advance' ? advanceAmount : totalPrice,
+        currency: 'INR'
+      };
+
+      console.log('Sending verification data:', verificationData);
+
+      const verificationResponse = await verifyPayment(verificationData);
+      
+      if (verificationResponse.success) {
+        console.log('Payment verified successfully:', verificationResponse);
+        router.push({
+          pathname: '/Screens/User/ConfirmBooking',
+          params: {
+            bookingId: finalBookingId,
+            paymentId: razorpay_payment_id,
+            paymentType,
+            amount: paymentType === 'advance' ? advanceAmount : totalPrice,
+            verified: 'true',
+            barberName,
+            bookingDate,
+            timeSlot
+          }
+        });
+      } else {
+        throw new Error(verificationResponse.message || 'Payment verification failed');
+      }
+    } catch (error) {
+      console.error('Payment verification error:', error);
+      Alert.alert(
+        'Payment Failed', 
+        error.message || 'Your payment was processed but verification failed. Please contact support.',
+        [
+          {
+            text: 'OK',
+            onPress: () => router.back()
+          }
+        ]
+      );
+    } finally {
+      setIsProcessing(false);
+    }
+  }, [bookingData, paymentType, advanceAmount, totalPrice, router]);
 
   const handlePayment = async () => {
     if (isProcessing) return;
@@ -89,28 +162,22 @@ export default function PayNow() {
         ? parseFloat(advanceAmount) 
         : parseFloat(totalPrice);
 
-      // Fixed: Added missing closing parenthesis
       if (isNaN(amount)) {
         throw new Error('Invalid payment amount');
       }
 
-      console.log('Creating order with data:', {
-        amount,
-        currency: 'INR',
-        bookingId: bookingData?.id,
-        paymentType,
-        services: bookingData?.services,
-        customerDetails: {
-          name: customerName,
-          email: customerEmail,
-          phone: customerPhone
-        }
-      });
+      // Get the booking ID to use for order creation
+      const finalBookingId = getBookingId();
+      if (!finalBookingId) {
+        throw new Error('Booking ID not found for order creation');
+      }
+
+      console.log('Creating order with booking ID:', finalBookingId);
 
       const orderResponse = await createOrder({
         amount,
         currency: 'INR',
-        bookingId: bookingData?.id,
+        bookingId: finalBookingId,
         paymentType,
         services: bookingData?.services,
         customerDetails: {
@@ -119,43 +186,55 @@ export default function PayNow() {
           phone: customerPhone
         }
       });
-
-      console.log('Order response:', orderResponse);
 
       if (!orderResponse?.id) {
         throw new Error(orderResponse?.message || 'Failed to create payment order');
       }
 
+      setCurrentOrderId(orderResponse.id);
+
       const options = {
-        name: 'Barber Shop',
-        description: 'Booking Payment',
+        name: 'BookmyCuts',
+        description: `Booking Payment (${paymentType === 'advance' ? 'Advance' : 'Full'})`,
         order_id: orderResponse.id,
         key: 'rzp_test_fccR1aGiSJLS1e', // Replace with your actual Razorpay key
-        amount: Math.round(amount * 100), // Convert to paise and ensure integer
+        amount: Math.round(amount * 100), // Convert to paise
         currency: 'INR',
         prefill: {
           name: customerName,
           email: customerEmail,
           contact: customerPhone
         },
-        theme: { color: '#4CAF50' }
+        theme: { color: '#4CAF50' },
+        notes: {
+          bookingId: finalBookingId,
+          paymentType,
+          services: bookingData?.services.map(s => s.name).join(', ')
+        }
       };
 
+      console.log('Opening Razorpay checkout with options:', options);
+      
       RazorpayCheckout.open(options)
-        .then(({ razorpay_payment_id }) => {
-          handlePaymentSuccess(razorpay_payment_id);
-        })
+        .then(handlePaymentSuccess)
         .catch((error) => {
           console.error('Razorpay error:', error);
-          if (error.code !== 2) { // Ignore manual dismissals
+          setIsProcessing(false);
+          
+          if (error.code === 0) {
+            Alert.alert('Payment Status', 'Payment completed. Verifying...');
+          } else if (error.code === 1) {
             Alert.alert('Payment Failed', error.description || 'Payment could not be completed');
+          } else if (error.code === 2) {
+            console.log('Payment cancelled by user');
+          } else {
+            Alert.alert('Payment Error', error.description || 'An error occurred during payment');
           }
         });
 
     } catch (error) {
       console.error('Payment error:', error);
       Alert.alert('Error', error.message || 'Failed to process payment');
-    } finally {
       setIsProcessing(false);
     }
   };
@@ -232,7 +311,10 @@ export default function PayNow() {
         activeOpacity={0.8}
       >
         {isProcessing ? (
-          <ActivityIndicator color="#fff" />
+          <View style={styles.buttonLoadingContainer}>
+            <ActivityIndicator color="#fff" />
+            <Text style={styles.processingText}>Processing...</Text>
+          </View>
         ) : (
           <Text style={styles.payButtonText}>{buttonText}</Text>
         )}
@@ -398,6 +480,16 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     backgroundColor: '#a5d6a7',
+  },
+  buttonLoadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  processingText: {
+    color: '#fff',
+    marginLeft: 8,
+    fontSize: 16,
   },
   payButtonText: {
     color: '#fff',
