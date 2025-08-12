@@ -72,7 +72,7 @@ export default function ShopOwnerHome() {
         </View>
         <TouchableOpacity 
           style={styles.profileButton}
-          onPress={() => navigation.navigate('Profile')}
+        
         >
           <MaterialIcons name="account-circle" size={32} color="#FF6B6B" />
         </TouchableOpacity>

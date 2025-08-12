@@ -325,14 +325,14 @@ const Home = ({ navigation }) => {
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.notificationButton}
-              onPress={handleNotificationsPress}
+              // onPress={handleNotificationsPress }
             >
               <Ionicons name="notifications-outline" size={24} color="#333" />
               <View style={styles.notificationDot} />
             </TouchableOpacity>
             <TouchableOpacity 
               style={styles.profileButton}
-              onPress={handleProfilePress}
+              // onPress={handleProfilePress}
             >
               <Image 
                 source={{ 

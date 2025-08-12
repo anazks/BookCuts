@@ -392,9 +392,9 @@ const BookNow = ({ navigation }) => {
       {/* Header */}
       <View style={styles.header}>
         {/* <Text style={styles.headerTitle}>Wheel Alignment Services</Text> */}
-        <TouchableOpacity>
+        {/* <TouchableOpacity>
           <Ionicons name="search" size={24} color={colors.text.primary} />
-        </TouchableOpacity>
+        </TouchableOpacity> */}
       </View>
 
       {/* Filter and Sort Bar */}
