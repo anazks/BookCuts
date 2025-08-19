@@ -53,8 +53,13 @@ export default function Login() {
       const response = await userLogin({ email, password });
       console.log('Login response:', response);
 
-      if (response.success === true && response.user && response.user.token){
-        await AsyncStorage.setItem('accessToken', response.user.token);
+      if (
+        response.success === true &&
+        response.result &&
+        response.result.token &&
+        !response.result.message
+      ) {
+        await AsyncStorage.setItem('accessToken',response.result.token);
         setShowUserTypeModal(true); // Show modal to confirm user type
       } else {
         const errorMessage =
