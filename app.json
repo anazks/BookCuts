@@ -2,6 +2,7 @@
   "expo": {
     "name": "bookmycuts",
     "slug": "bookmycuts",
+    "owner": "bookmycuts",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -34,7 +35,8 @@
           "resizeMode": "contain",
           "backgroundColor": "#ffffff"
         }
-      ]
+      ],
+      "expo-dev-client"
     ],
     "experiments": {
       "typedRoutes": true
@@ -42,7 +44,7 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "351da7d6-4148-460a-b184-11a16c9b12e0"
+        "projectId": "0a57d4d1-d11d-4679-96a6-6475ef0c5441"
       }
     }
   }

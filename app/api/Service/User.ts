@@ -18,9 +18,22 @@ export const userLogin = async (userData: any) => {
         console.log("Response from userLogin:", response);
         return response.data;
     } catch (error: any) {
+        console.error("------ FULL LOGIN ERROR ------");
+        console.error("Error object:", error);
+        console.error("Error message:", error.message);
+        console.error("Error config:", error.config);
+        console.error("Error request:", error.request);
+        console.error("Error response:", error.response);
+        console.error("Error response data:", error?.response?.data);
+        console.error("Error status:", error?.response?.status);
+        console.error("Error headers:", error?.response?.headers);
+        console.error("------ END ERROR LOG ------");
+
+        // still throw a clean error to the app
         throw error?.response?.data || { message: "Login failed" };
     }
-}
+};
+
 
 export const getmyProfile = async (userId: string) => {
     try {

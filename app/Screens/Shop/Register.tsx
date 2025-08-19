@@ -1,16 +1,16 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    SafeAreaView,
-    ScrollView,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TextInput,
-    TouchableOpacity,
-    View
+  ActivityIndicator,
+  Alert,
+  SafeAreaView,
+  ScrollView,
+  StatusBar,
+  StyleSheet,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  View
 } from 'react-native';
 import { RegisterShopUser } from '../../api/Service/Shop';
 export default function ShopRegister() {
@@ -209,8 +209,8 @@ export default function ShopRegister() {
 
           {/* Login Link */}
           <View style={styles.loginContainer}>
-            <Text style={styles.loginText}>Already have an account? </Text>
-            <TouchableOpacity onPress={() => router.push('/shop/login')}>
+            <Text style={styles.loginText}>Already have an account...? </Text>
+            <TouchableOpacity onPress={() => router.push('/Screens/Shop/Login')}>
               <Text style={styles.loginLink}>Login</Text>
             </TouchableOpacity>
           </View>

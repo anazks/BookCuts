@@ -19,6 +19,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
+
 import { userLogin } from '../../api/Service/User';
 
 const { width, height } = Dimensions.get('window');
@@ -52,13 +53,8 @@ export default function Login() {
       const response = await userLogin({ email, password });
       console.log('Login response:', response);
 
-      if (
-        response.success === true &&
-        response.result &&
-        response.result.token &&
-        !response.result.message
-      ) {
-        await AsyncStorage.setItem('accessToken', response.data.token);
+      if (response.success === true && response.user && response.user.token){
+        await AsyncStorage.setItem('accessToken', response.user.token);
         setShowUserTypeModal(true); // Show modal to confirm user type
       } else {
         const errorMessage =
@@ -179,7 +175,7 @@ export default function Login() {
                 disabled={isLoading}
                 onPress={() => router.push('/forgot-password')}
               >
-                <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
+                <Text style={styles.forgotPasswordText}>Forgot Password..?</Text>
               </TouchableOpacity>
 
               {/* Login Button */}
@@ -287,7 +283,7 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: '#FFFFFF',
   },
   keyboardAvoidingView: {
     flex: 1,
@@ -298,197 +294,206 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    overflow: 'hidden',
+    zIndex: 1,
   },
   shape: {
     position: 'absolute',
-    borderRadius: 50,
-    opacity: 0.05,
+    borderRadius: 100,
+    opacity: 0.1,
   },
   shape1: {
     width: 200,
     height: 200,
     backgroundColor: '#FF6B6B',
-    top: -100,
+    top: -50,
     right: -50,
   },
   shape2: {
     width: 150,
     height: 150,
-    backgroundColor: '#FF6B6B',
-    bottom: 100,
+    backgroundColor: '#4ECDC4',
+    top: height * 0.3,
     left: -75,
   },
   shape3: {
-    width: 100,
-    height: 100,
-    backgroundColor: '#FF6B6B',
-    top: '40%',
-    right: -50,
+    width: 120,
+    height: 120,
+    backgroundColor: '#45B7D1',
+    bottom: 100,
+    right: -60,
   },
   headerSection: {
     paddingTop: 40,
     paddingHorizontal: 24,
-    alignItems: 'center',
+    paddingBottom: 20,
+    zIndex: 2,
   },
   logoContainer: {
     alignItems: 'center',
-    marginBottom: 32,
+    marginBottom: 30,
   },
   logoIcon: {
     width: 70,
     height: 70,
-    borderRadius: 18,
     backgroundColor: '#FF6B6B',
+    borderRadius: 35,
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 16,
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25,
-    shadowRadius: 12,
-    elevation: 6,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 8,
   },
   logoText: {
     fontSize: 28,
-    fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.8,
-    marginBottom: 6,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
   },
   taglineText: {
     fontSize: 14,
-    color: '#64748B',
-    fontWeight: '400',
+    color: '#6B7280',
+    fontStyle: 'italic',
   },
   welcomeContainer: {
     alignItems: 'center',
   },
   welcomeText: {
     fontSize: 24,
-    fontWeight: '700',
-    color: '#0F172A',
-    letterSpacing: -0.6,
-    marginBottom: 6,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginBottom: 4,
   },
   loginText: {
-    fontSize: 15,
-    color: '#64748B',
-    fontWeight: '400',
+    fontSize: 16,
+    color: '#6B7280',
   },
   scrollContainer: {
     flex: 1,
+    zIndex: 2,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingBottom: 40,
+    paddingHorizontal: 24,
   },
   formContainer: {
-    marginTop: 32,
-    paddingHorizontal: 24,
+    flex: 1,
+    justifyContent: 'center',
+    minHeight: height * 0.5,
   },
   form: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     padding: 24,
     shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
     shadowOpacity: 0.1,
-    shadowRadius: 16,
-    elevation: 8,
+    shadowRadius: 10,
+    elevation: 5,
   },
   inputContainer: {
     marginBottom: 20,
   },
   label: {
     fontSize: 14,
+    fontWeight: '600',
     color: '#374151',
     marginBottom: 8,
-    fontWeight: '600',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    paddingHorizontal: 16,
+    height: 56,
   },
   inputIcon: {
-    marginLeft: 16,
     marginRight: 12,
   },
   input: {
     flex: 1,
-    height: 52,
     fontSize: 16,
-    color: '#0F172A',
-    paddingRight: 16,
+    color: '#1F2937',
   },
   passwordInput: {
-    paddingRight: 0,
+    paddingRight: 40,
   },
   visibilityToggle: {
-    padding: 16,
+    position: 'absolute',
+    right: 16,
+    padding: 4,
   },
   forgotPassword: {
-    alignSelf: 'flex-end',
+    alignItems: 'flex-end',
     marginBottom: 24,
-    marginTop: -4,
   },
   forgotPasswordText: {
-    color: '#FF6B6B',
     fontSize: 14,
-    fontWeight: '600',
+    color: '#FF6B6B',
+    fontWeight: '500',
   },
   loginButton: {
     backgroundColor: '#FF6B6B',
-    height: 52,
     borderRadius: 12,
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 20,
+    justifyContent: 'center',
+    marginBottom: 24,
     shadowColor: '#FF6B6B',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
-    shadowRadius: 10,
-    elevation: 5,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 6,
   },
   loginButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.6,
   },
   loginButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     marginRight: 8,
   },
   dividerContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
+    marginVertical: 24,
   },
   dividerLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: '#E5E7EB',
   },
   dividerText: {
-    paddingHorizontal: 16,
-    color: '#64748B',
+    marginHorizontal: 16,
     fontSize: 14,
+    color: '#9CA3AF',
     fontWeight: '500',
   },
   shopOwnerButton: {
-    borderWidth: 2,
-    borderColor: '#FF6B6B',
-    height: 52,
+    backgroundColor: '#F9FAFB',
     borderRadius: 12,
+    height: 56,
     flexDirection: 'row',
-    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: '#FF6B6B',
   },
   shopOwnerButtonText: {
     color: '#FF6B6B',
@@ -499,79 +504,81 @@ const styles = StyleSheet.create({
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 20,
-    paddingHorizontal: 24,
-    marginTop: 16,
+    alignItems: 'center',
+    paddingVertical: 24,
+    paddingBottom: 40,
   },
   footerText: {
-    color: '#64748B',
-    fontSize: 16,
+    fontSize: 14,
+    color: '#6B7280',
   },
   signupText: {
+    fontSize: 14,
     color: '#FF6B6B',
-    fontSize: 16,
     fontWeight: '600',
   },
-  // Modal Styles
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.6)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
   },
   modalContainer: {
     backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 10,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    elevation: 10,
   },
   modalHeader: {
     alignItems: 'center',
-    paddingTop: 32,
-    paddingHorizontal: 24,
-    paddingBottom: 32,
-  },
-  modalIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 20,
-    backgroundColor: '#FEF2F2',
-    justifyContent: 'center',
-    alignItems: 'center',
     marginBottom: 24,
   },
+  modalIconContainer: {
+    width: 60,
+    height: 60,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
   modalTitle: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#0F172A',
-    marginBottom: 8,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
     textAlign: 'center',
+    marginBottom: 8,
   },
   modalSubtitle: {
-    fontSize: 16,
-    color: '#64748B',
+    fontSize: 14,
+    color: '#6B7280',
     textAlign: 'center',
-    lineHeight: 24,
   },
   modalButtonContainer: {
-    paddingHorizontal: 24,
-    gap: 16,
+    gap: 12,
   },
   modalButton: {
-    borderRadius: 16,
-    padding: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 4,
+    borderRadius: 12,
+    padding: 16,
+    borderWidth: 1,
   },
   customerButton: {
-    backgroundColor: '#F8FAFC',
-    borderWidth: 2,
-    borderColor: '#E2E8F0',
+    backgroundColor: '#F9FAFB',
+    borderColor: '#E5E7EB',
   },
   shopOwnerModalButton: {
     backgroundColor: '#FF6B6B',
+    borderColor: '#FF6B6B',
   },
   modalButtonContent: {
     flexDirection: 'row',
@@ -582,14 +589,13 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   modalButtonTitle: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    color: '#0F172A',
-    marginBottom: 4,
+    color: '#1F2937',
+    marginBottom: 2,
   },
   modalButtonSubtitle: {
     fontSize: 14,
-    color: '#64748B',
-    lineHeight: 20,
+    color: '#6B7280',
   },
 });

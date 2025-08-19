@@ -1,12 +1,15 @@
+import { Ionicons, MaterialIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { router } from 'expo-router';
 import React, { useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
-  Image,
+  Dimensions,
   KeyboardAvoidingView,
+  Modal,
   Platform,
+  Pressable,
   SafeAreaView,
   ScrollView,
   StatusBar,
@@ -16,257 +19,266 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import Icon from 'react-native-vector-icons/MaterialIcons';
-import { LoginShopUser } from '../../api/Service/Shop';
+import { userLogin } from '../../api/Service/User';
+
+const { width, height } = Dimensions.get('window');
 
 export default function Login() {
-  const [activeTab, setActiveTab] = useState('password'); // 'password' or 'otp'
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [phone, setPhone] = useState('');
-  const [otp, setOtp] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [isPasswordVisible, setIsPasswordVisible] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [showUserTypeModal, setShowUserTypeModal] = useState(false);
 
   const handleLogin = async () => {
-    setLoading(true);
-    
-    try {
-      // Validate inputs
-      if (activeTab === 'password') {
-        if (!email || !password) {
-          Alert.alert('Error', 'Please enter both email and password');
-          setLoading(false);
-          return;
-        }
-      } else {
-        if (!phone || !otp) {
-          Alert.alert('Error', 'Please enter both phone number and OTP');
-          setLoading(false);
-          return;
-        }
-      }
-
-      // Prepare login data based on active tab
-      const loginData = activeTab === 'password' 
-        ? { email, password }
-        : { phone, otp };
-
-      // Call the shop login API
-      const response = await LoginShopUser(loginData);
-      console.log('Login response:', response);
-      if(response.result.token){
-        await AsyncStorage.setItem('accessToken', response.result.token);
-    }
-      router.push('/ShopOwner/shopOwnerHome')
-      if (response.success) {
-      await AsyncStorage.setItem('accessToken', response.result.token);
-        // Successful login - navigate to shop dashboard
-        Alert.alert('Success', 'Login successful!', [
-          { text: 'OK', onPress: () => router.push('/ShopOwner/shopOwnerHome') }
-        ]);
-      } else {
-        // Show error message from API or default message
-        const errorMessage = response.message || 'Login failed. Please try again.';
-        Alert.alert('Login Error', errorMessage);
-      }
-    } catch (error) {
-      console.error('Login error:', error);
-      Alert.alert('Error', 'An unexpected error occurred. Please try again.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendOtp = async () => {
-    if (!phone) {
-      Alert.alert('Error', 'Please enter your phone number');
+    if (!email.trim()) {
+      Alert.alert('Error', 'Please enter your email');
       return;
     }
 
-    setLoading(true);
-    
+    if (!password.trim()) {
+      Alert.alert('Error', 'Please enter your password');
+      return;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      Alert.alert('Error', 'Please enter a valid email address');
+      return;
+    }
+
+    setIsLoading(true);
+
     try {
-      // Call your OTP sending API here
-      // This is a placeholder - replace with actual OTP API call
-      const otpResponse = { success: true }; // Mock response
-      
-      if (otpResponse.success) {
-        setOtpSent(true);
-        Alert.alert('OTP Sent', 'OTP has been sent to your mobile number');
+      const response = await userLogin({ email, password });
+      console.log('Login response:', response);
+
+      if (
+        response.success === true &&
+        response.result &&
+        response.result.token &&
+        !response.result.message
+      ) {
+        await AsyncStorage.setItem('accessToken', response.data.token);
+        setShowUserTypeModal(true); // Show modal to confirm user type
       } else {
-        Alert.alert('Error', 'Failed to send OTP. Please try again.');
+        const errorMessage =
+          response.result?.message || response.message || 'Invalid login details.';
+        Alert.alert('Login Failed', errorMessage, [{ text: 'OK' }]);
       }
     } catch (error) {
-      console.error('OTP sending error:', error);
-      Alert.alert('Error', 'Failed to send OTP. Please try again.');
+      console.error('Login error:', error);
+      Alert.alert(
+        'Error',
+        'An unexpected error occurred. Please try again later.',
+        [{ text: 'OK' }]
+      );
     } finally {
-      setLoading(false);
+      setIsLoading(false);
+    }
+  };
+
+  const handleUserTypeSelection = (isShopOwner) => {
+    setShowUserTypeModal(false);
+    if (isShopOwner) {
+      router.push('../shop/login');
+    } else {
+      router.replace('/(tabs)/Home');
     }
   };
 
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar backgroundColor="#FF6B6B" barStyle="light-content" />
-      
+      <StatusBar backgroundColor="#FFFFFF" barStyle="dark-content" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardAvoid}
+        style={styles.keyboardAvoidingView}
+        keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
       >
-        <ScrollView contentContainerStyle={styles.scrollContent}>
-          {/* Logo Header */}
+        {/* Background Design Elements */}
+        <View style={styles.backgroundShapes}>
+          <View style={[styles.shape, styles.shape1]} />
+          <View style={[styles.shape, styles.shape2]} />
+          <View style={[styles.shape, styles.shape3]} />
+        </View>
+
+        {/* Header Section */}
+        <View style={styles.headerSection}>
           <View style={styles.logoContainer}>
-            <Image
-              source={{ uri: 'https://cdn-icons-png.flaticon.com/512/3069/3069172.png' }}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-            <Text style={styles.title}>Shop Owner Login</Text>
-            <Text style={styles.subtitle}>Manage your salon bookings</Text>
+            <View style={styles.logoIcon}>
+              <MaterialIcons name="content-cut" size={32} color="#FFFFFF" />
+            </View>
+            <Text style={styles.logoText}>BookMyCuts</Text>
+            <Text style={styles.taglineText}>Your perfect cut awaits</Text>
           </View>
-
-          {/* Login Tabs */}
-          <View style={styles.tabContainer}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'password' && styles.activeTab]}
-              onPress={() => setActiveTab('password')}
-            >
-              <Text style={[styles.tabText, activeTab === 'password' && styles.activeTabText]}>
-                Email Login
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === 'otp' && styles.activeTab]}
-              onPress={() => setActiveTab('otp')}
-            >
-              <Text style={[styles.tabText, activeTab === 'otp' && styles.activeTabText]}>
-                OTP Login
-              </Text>
-            </TouchableOpacity>
+          
+          <View style={styles.welcomeContainer}>
+            <Text style={styles.welcomeText}>Welcome Back</Text>
+            <Text style={styles.loginText}>Sign in to your Saloon account </Text>
           </View>
+        </View>
 
-          {/* Email/Password Form */}
-          {activeTab === 'password' && (
-            <View style={styles.formContainer}>
+        {/* Scrollable Content */}
+        <ScrollView 
+          style={styles.scrollContainer}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Login Form */}
+          <View style={styles.formContainer}>
+            <View style={styles.form}>
+              {/* Email Input */}
               <View style={styles.inputContainer}>
-                <Icon name="email" size={20} color="#FF6B6B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Email Address"
-                  placeholderTextColor="#999"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  value={email}
-                  onChangeText={setEmail}
-                />
-              </View>
-
-              <View style={styles.inputContainer}>
-                <Icon name="lock" size={20} color="#FF6B6B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Password"
-                  placeholderTextColor="#999"
-                  secureTextEntry={!showPassword}
-                  value={password}
-                  onChangeText={setPassword}
-                />
-                <TouchableOpacity 
-                  style={styles.eyeIcon} 
-                  onPress={() => setShowPassword(!showPassword)}
-                >
-                  <Icon 
-                    name={showPassword ? "visibility-off" : "visibility"} 
-                    size={20} 
-                    color="#999" 
+                <Text style={styles.label}>Email Address</Text>
+                <View style={styles.inputWrapper}>
+                  <MaterialIcons name="email" size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <TextInput
+                    style={styles.input}
+                    placeholder="Enter your email"
+                    placeholderTextColor="#94A3B8"
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    autoCorrect={false}
+                    value={email}
+                    onChangeText={setEmail}
+                    editable={!isLoading}
                   />
-                </TouchableOpacity>
+                </View>
               </View>
 
-              <TouchableOpacity style={styles.forgotPassword}>
+              {/* Password Input */}
+              <View style={styles.inputContainer}>
+                <Text style={styles.label}>Password</Text>
+                <View style={styles.inputWrapper}>
+                  <MaterialIcons name="lock" size={20} color="#94A3B8" style={styles.inputIcon} />
+                  <TextInput
+                    style={[styles.input, styles.passwordInput]}
+                    placeholder="Enter your password"
+                    placeholderTextColor="#94A3B8"
+                    secureTextEntry={!isPasswordVisible}
+                    value={password}
+                    onChangeText={setPassword}
+                    editable={!isLoading}
+                  />
+                  <TouchableOpacity
+                    style={styles.visibilityToggle}
+                    onPress={() => setIsPasswordVisible(!isPasswordVisible)}
+                    disabled={isLoading}
+                  >
+                    <Ionicons 
+                      name={isPasswordVisible ? 'eye-off' : 'eye'} 
+                      size={20} 
+                      color="#FF6B6B" 
+                    />
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              <TouchableOpacity 
+                style={styles.forgotPassword} 
+                disabled={isLoading}
+                onPress={() => router.push('/forgot-password')}
+              >
                 <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
               </TouchableOpacity>
 
-              <TouchableOpacity 
-                style={[styles.loginButton, loading && styles.disabledButton]}
+              {/* Login Button */}
+              <TouchableOpacity
+                style={[
+                  styles.loginButton,
+                  isLoading && styles.loginButtonDisabled
+                ]}
                 onPress={handleLogin}
-                disabled={loading || !email || !password}
+                disabled={isLoading}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
+                {isLoading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
                 ) : (
-                  <Text style={styles.loginButtonText}>Login</Text>
+                  <>
+                    <Text style={styles.loginButtonText}>Sign In</Text>
+                    <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+                  </>
                 )}
               </TouchableOpacity>
-            </View>
-          )}
 
-          {/* OTP Form */}
-          {activeTab === 'otp' && (
-            <View style={styles.formContainer}>
-              <View style={styles.inputContainer}>
-                <Icon name="phone" size={20} color="#FF6B6B" style={styles.inputIcon} />
-                <TextInput
-                  style={styles.input}
-                  placeholder="Phone Number"
-                  placeholderTextColor="#999"
-                  keyboardType="phone-pad"
-                  value={phone}
-                  onChangeText={setPhone}
-                  maxLength={10}
-                />
+              {/* Divider */}
+              <View style={styles.dividerContainer}>
+                <View style={styles.dividerLine} />
+                <Text style={styles.dividerText}>OR</Text>
+                <View style={styles.dividerLine} />
               </View>
 
-              {otpSent && (
-                <View style={styles.inputContainer}>
-                  <Icon name="sms" size={20} color="#FF6B6B" style={styles.inputIcon} />
-                  <TextInput
-                    style={styles.input}
-                    placeholder="Enter OTP"
-                    placeholderTextColor="#999"
-                    keyboardType="number-pad"
-                    value={otp}
-                    onChangeText={setOtp}
-                    maxLength={6}
-                  />
-                </View>
-              )}
-
-              <TouchableOpacity 
-                style={[styles.otpButton, loading && styles.disabledButton]}
-                onPress={otpSent ? handleLogin : handleSendOtp}
-                disabled={loading || (otpSent ? !otp : !phone)}
+              {/* Shop Owner Button */}
+              <TouchableOpacity
+                style={styles.shopOwnerButton}
+                onPress={() => router.push('/Screens/Shop/Register')}
+                disabled={isLoading}
               >
-                {loading ? (
-                  <ActivityIndicator color="#FFF" />
-                ) : (
-                  <Text style={styles.otpButtonText}>
-                    {otpSent ? 'Verify OTP' : 'Send OTP'}
-                  </Text>
-                )}
+                <MaterialIcons name="store" size={20} color="#FF6B6B" />
+                <Text style={styles.shopOwnerButtonText}>Continue as Shop Owner</Text>
               </TouchableOpacity>
-
-              {otpSent && (
-                <TouchableOpacity 
-                  style={styles.resendOtp} 
-                  onPress={handleSendOtp}
-                  disabled={loading}
-                >
-                  <Text style={styles.resendOtpText}>Resend OTP</Text>
-                </TouchableOpacity>
-              )}
             </View>
-          )}
+          </View>
 
-          {/* Footer Links */}
+          {/* Footer */}
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Don't have an account?</Text>
-            <TouchableOpacity onPress={() => router.push('/Screens/Shop/Register')}>
-              <Text style={styles.footerLink}>Register your salon</Text>
+            <Text style={styles.footerText}>Don't have an account?.... </Text>
+            <TouchableOpacity
+              onPress={() => router.push('/Screens/Shop/Register')}
+              disabled={isLoading}
+            >
+              <Text style={styles.signupText}>Create Account</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>
+
+        {/* User Type Confirmation Modal */}
+        <Modal
+          animationType="slide"
+          transparent={true}
+          visible={showUserTypeModal}
+          onRequestClose={() => setShowUserTypeModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContainer}>
+              <View style={styles.modalHeader}>
+                <View style={styles.modalIconContainer}>
+                  <MaterialIcons name="help-outline" size={32} color="#FF6B6B" />
+                </View>
+                <Text style={styles.modalTitle}>Account Type Confirmation</Text>
+                <Text style={styles.modalSubtitle}>Please confirm your account type to continue</Text>
+              </View>
+              
+              <View style={styles.modalButtonContainer}>
+                <Pressable
+                  style={[styles.modalButton, styles.customerButton]}
+                  onPress={() => handleUserTypeSelection(false)}
+                >
+                  <View style={styles.modalButtonContent}>
+                    <MaterialIcons name="person" size={24} color="#64748B" />
+                    <View style={styles.modalButtonTextContainer}>
+                      <Text style={styles.modalButtonTitle}>Customer</Text>
+                      <Text style={styles.modalButtonSubtitle}>Book appointments & services</Text>
+                    </View>
+                  </View>
+                </Pressable>
+                
+                <Pressable
+                  style={[styles.modalButton, styles.shopOwnerModalButton]}
+                  onPress={() => handleUserTypeSelection(true)}
+                >
+                  <View style={styles.modalButtonContent}>
+                    <MaterialIcons name="store" size={24} color="#FFFFFF" />
+                    <View style={styles.modalButtonTextContainer}>
+                      <Text style={[styles.modalButtonTitle, { color: '#FFFFFF' }]}>Shop Owner</Text>
+                      <Text style={[styles.modalButtonSubtitle, { color: '#FFFFFF', opacity: 0.9 }]}>Manage your salon business</Text>
+                    </View>
+                  </View>
+                </Pressable>
+              </View>
+            </View>
+          </View>
+        </Modal>
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -275,141 +287,309 @@ export default function Login() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFF',
+    backgroundColor: '#F8FAFC',
   },
-  keyboardAvoid: {
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  backgroundShapes: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    overflow: 'hidden',
+  },
+  shape: {
+    position: 'absolute',
+    borderRadius: 50,
+    opacity: 0.05,
+  },
+  shape1: {
+    width: 200,
+    height: 200,
+    backgroundColor: '#FF6B6B',
+    top: -100,
+    right: -50,
+  },
+  shape2: {
+    width: 150,
+    height: 150,
+    backgroundColor: '#FF6B6B',
+    bottom: 100,
+    left: -75,
+  },
+  shape3: {
+    width: 100,
+    height: 100,
+    backgroundColor: '#FF6B6B',
+    top: '40%',
+    right: -50,
+  },
+  headerSection: {
+    paddingTop: 40,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+  },
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 32,
+  },
+  logoIcon: {
+    width: 70,
+    height: 70,
+    borderRadius: 18,
+    backgroundColor: '#FF6B6B',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 16,
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  logoText: {
+    fontSize: 28,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.8,
+    marginBottom: 6,
+  },
+  taglineText: {
+    fontSize: 14,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0F172A',
+    letterSpacing: -0.6,
+    marginBottom: 6,
+  },
+  loginText: {
+    fontSize: 15,
+    color: '#64748B',
+    fontWeight: '400',
+  },
+  scrollContainer: {
     flex: 1,
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 25,
-    paddingBottom: 20,
-  },
-  logoContainer: {
-    alignItems: 'center',
-    marginTop: 40,
-    marginBottom: 30,
-  },
-  logo: {
-    width: 80,
-    height: 80,
-    marginBottom: 15,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: '#FF6B6B',
-    marginBottom: 5,
-  },
-  subtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  tabContainer: {
-    flexDirection: 'row',
-    borderBottomWidth: 1,
-    borderBottomColor: '#EEE',
-    marginBottom: 20,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 15,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
-  },
-  activeTab: {
-    borderBottomColor: '#FF6B6B',
-  },
-  tabText: {
-    fontSize: 16,
-    color: '#999',
-    fontWeight: '600',
-  },
-  activeTabText: {
-    color: '#FF6B6B',
+    paddingBottom: 40,
   },
   formContainer: {
-    marginTop: 10,
+    marginTop: 32,
+    paddingHorizontal: 24,
+  },
+  form: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 8,
   },
   inputContainer: {
+    marginBottom: 20,
+  },
+  label: {
+    fontSize: 14,
+    color: '#374151',
+    marginBottom: 8,
+    fontWeight: '600',
+  },
+  inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#DDD',
-    borderRadius: 8,
-    paddingHorizontal: 15,
-    marginBottom: 15,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
   },
   inputIcon: {
-    marginRight: 10,
+    marginLeft: 16,
+    marginRight: 12,
   },
   input: {
     flex: 1,
-    height: 50,
-    color: '#333',
-    fontSize: 15,
+    height: 52,
+    fontSize: 16,
+    color: '#0F172A',
+    paddingRight: 16,
   },
-  eyeIcon: {
-    padding: 10,
+  passwordInput: {
+    paddingRight: 0,
+  },
+  visibilityToggle: {
+    padding: 16,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
-    marginBottom: 20,
+    marginBottom: 24,
+    marginTop: -4,
   },
   forgotPasswordText: {
     color: '#FF6B6B',
     fontSize: 14,
+    fontWeight: '600',
   },
   loginButton: {
     backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    height: 50,
+    height: 52,
+    borderRadius: 12,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
     marginBottom: 20,
+    shadowColor: '#FF6B6B',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 5,
   },
-  disabledButton: {
+  loginButtonDisabled: {
     opacity: 0.7,
   },
   loginButtonText: {
-    color: '#FFF',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: 18,
     fontWeight: '600',
+    marginRight: 8,
   },
-  otpButton: {
-    backgroundColor: '#FF6B6B',
-    borderRadius: 8,
-    height: 50,
+  dividerContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E2E8F0',
+  },
+  dividerText: {
+    paddingHorizontal: 16,
+    color: '#64748B',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  shopOwnerButton: {
+    borderWidth: 2,
+    borderColor: '#FF6B6B',
+    height: 52,
+    borderRadius: 12,
+    flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#FEF2F2',
   },
-  otpButtonText: {
-    color: '#FFF',
+  shopOwnerButtonText: {
+    color: '#FF6B6B',
     fontSize: 16,
     fontWeight: '600',
-  },
-  resendOtp: {
-    alignSelf: 'center',
-  },
-  resendOtpText: {
-    color: '#FF6B6B',
-    fontSize: 14,
+    marginLeft: 8,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    marginTop: 20,
+    paddingVertical: 20,
+    paddingHorizontal: 24,
+    marginTop: 16,
   },
   footerText: {
-    color: '#666',
-    fontSize: 14,
-    marginRight: 5,
+    color: '#64748B',
+    fontSize: 16,
   },
-  footerLink: {
+  signupText: {
     color: '#FF6B6B',
-    fontSize: 14,
+    fontSize: 16,
     fontWeight: '600',
+  },
+  // Modal Styles
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'flex-end',
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingBottom: Platform.OS === 'ios' ? 34 : 24,
+  },
+  modalHeader: {
+    alignItems: 'center',
+    paddingTop: 32,
+    paddingHorizontal: 24,
+    paddingBottom: 32,
+  },
+  modalIconContainer: {
+    width: 80,
+    height: 80,
+    borderRadius: 20,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  modalSubtitle: {
+    fontSize: 16,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  modalButtonContainer: {
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  modalButton: {
+    borderRadius: 16,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  customerButton: {
+    backgroundColor: '#F8FAFC',
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
+  },
+  shopOwnerModalButton: {
+    backgroundColor: '#FF6B6B',
+  },
+  modalButtonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  modalButtonTextContainer: {
+    marginLeft: 16,
+    flex: 1,
+  },
+  modalButtonTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#0F172A',
+    marginBottom: 4,
+  },
+  modalButtonSubtitle: {
+    fontSize: 14,
+    color: '#64748B',
+    lineHeight: 20,
   },
 });
