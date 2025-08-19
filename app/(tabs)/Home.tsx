@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { getAllShops } from '../api/Service/Shop';
 import { getmyProfile } from '../api/Service/User';
+import Premium from '../Components/Shop/Premium';
 
 const Home = ({ navigation }) => {
   const [shops, setShops] = useState([]);
@@ -649,6 +650,14 @@ const Home = ({ navigation }) => {
           </View>
         )}
 
+          <View>
+
+              <Premium/>
+          </View>
+            <View>
+
+              <Premium/>
+          </View>
         {/* Trending Designs Section */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -1018,6 +1027,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   section: {
+    marginTop:10,
     marginBottom: 28,
   },
   sectionHeader: {
